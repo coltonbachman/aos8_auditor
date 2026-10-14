@@ -1,0 +1,55 @@
+aos8-auditor
+Copyright 2026 Colton Bachman.
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file for the
+full terms.
+
+------------------------------------------------------------------------------
+Status and warranty
+------------------------------------------------------------------------------
+
+This is an independent, unofficial tool. It is provided "AS IS" without warranty
+or condition of any kind, express or implied, carries no service-level
+commitment, and is not serviced through any vendor's support channels. Report
+issues through this project's issue tracker.
+
+Findings produced by this tool are advisory. They do not constitute a security
+assessment, certification, or attestation of any deployment by any vendor.
+
+------------------------------------------------------------------------------
+Third-party content and trademarks
+------------------------------------------------------------------------------
+
+This project is NOT affiliated with, endorsed by, or sponsored by Hewlett
+Packard Enterprise Development LP or HPE Aruba Networking. "ArubaOS", "Aruba",
+"HPE", "Hewlett Packard Enterprise", and "Mobility Master" are trademarks of
+their respective owners and are used here solely to identify the systems this
+tool audits (nominative use).
+
+Several data sets shipped with this project are derived from material published
+by HPE Aruba Networking. They are included for interoperability and security
+reference, remain the property of their respective owners, and are NOT licensed
+under the Apache License that covers this project's own code:
+
+  * aos8_auditor/controls/*.yaml
+    The control definitions restate technical hardening recommendations as
+    machine-checkable rules, drawn from two source documents: the "ArubaOS
+    Hardening Guide" (Aruba Federal Technology Guide, AOS 8.2, doc v1.0,
+    2020-01-13) and the "ArubaOS 8 Controller Hardening Guide" (rev 10, January
+    2023). Control titles, expected states, and verification commands describe
+    factual device configuration. The guides themselves remain the authoritative
+    statement of that guidance.
+
+  * aos8_auditor/data/open_ports.yaml
+    aos8_auditor/data/scanner_false_positives.yaml
+    Transcriptions of the open-port and common-false-positive reference tables
+    from the 2023 guide named above, held as offline reference data.
+
+  * aos8_auditor/advisories/aos8_workarounds.csv
+    Advisory identifiers, vulnerability titles, and workaround text reproduced
+    from published HPE Aruba Networking security advisories (2021-2026). This is
+    a point-in-time snapshot and is not updated automatically. Refer to the
+    vendor's security advisory portal for the authoritative and current text:
+    https://www.arubanetworks.com/support-services/security-bulletins/
+
+CVE identifiers are assigned by the CVE Program (https://www.cve.org/).

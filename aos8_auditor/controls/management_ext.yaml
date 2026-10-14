@@ -1,0 +1,200 @@
+# Management-plane (extended): SSHv2 transport, WebUI session limit, certificate
+# lifecycle (CSR / import / inventory / storage), and secure file movement
+# (SCP transfer, backup/restore, log copy). Complements management.yaml; no
+# overlap with the cert-replacement / WebUI-cert-auth / SSH-pubkey controls there.
+
+# --- SSHv2 transport hardening ---------------------------------------------
+- id: AOS8-MGMT-SSH-VERSION-001
+  title: Insecure SSHv1 transport not enabled (SSHv2 only)
+  category: management
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  # AOS 8 is SSHv2 by default; flag only an explicit fallback to v1 in config.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ssh\\s+.*version\\s+1\\b"}
+        then: fail
+      - else: pass
+  remediation_hint: "Do not enable SSHv1. AOS 8 uses SSHv2 by default; remove any 'ssh ... version 1' fallback."
+  references: [{guide_section: "Use CLI over SSHv2 or Local Serial Console", ref: "414-416"}]
+
+- id: AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001
+  title: Cleartext management transports (Telnet / HTTP) disabled
+  category: management
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*telnet\\s+(cli|soe)\\b"}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*web-server\\s+.*\\bhttp\\b(?![-s])"}
+        then: fail
+      - else: pass
+  remediation_hint: "no telnet cli ; no telnet soe ; ensure WebUI is HTTPS-only (no plain http). Manage via SSHv2 / HTTPS / serial console only."
+  references: [{guide_section: "Use CLI over SSHv2 or Local Serial Console", ref: "414-416"}]
+
+# --- WebUI session / connection limits -------------------------------------
+- id: AOS8-MGMT-WEBUI-SESSLIMIT-001
+  title: WebUI simultaneous connection / session limit within platform maximum
+  category: management
+  severity: informational
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  # Platform hard limit is 22 simultaneous WebUI sessions; a configured
+  # session-limit must not exceed it. Most deployments leave it default, so an
+  # absent/unparseable limit is a manual review, not a failure.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: webui_session_limit}
+        then: manual
+      - when: {source: fact, predicate: fact_lte, arg: {path: webui_session_limit, value: 22}}
+        then: pass
+      - else: fail
+  remediation_hint: "web-server profile ; keep the WebUI session-limit at or below the platform maximum of 22 simultaneous connections."
+  references: [{guide_section: "WebUI Simultaneous Connection Limit (max 22)", ref: "398-401"}]
+
+# --- Certificate lifecycle: CSR / import / inventory / storage --------------
+- id: AOS8-MGMT-CSR-001
+  title: Pending CSR uses an approved key type and strength
+  category: management
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: server_certs, command: show crypto-local pki serverCerts}
+    - {key: running_config, command: show running-config}
+  # Only one outstanding CSR can exist; if a CSR command/record is present, its
+  # key params must be strong (EC secp256r1/secp384r1 or RSA 2048/4096). When no
+  # CSR is captured in read-only output, this is a manual check.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)crypto\\s+pki\\s+csr\\b.*\\b(rsa\\s+key_len\\s+(2048|4096)|ec\\s+curve-name\\s+secp(256|384)r1)\\b"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)crypto\\s+pki\\s+csr\\b"}
+        then: fail
+      - else: manual
+  remediation_hint: "crypto pki csr {rsa key_len 2048|4096 | ec curve-name secp256r1|secp384r1} ... (one outstanding CSR at a time; import the signed cert before generating another)."
+  references: [{guide_section: "Generate Certificate Signing Request", ref: "2214-2289"}]
+
+- id: AOS8-MGMT-CERT-IMPORT-001
+  title: Import server/CA/client certificates of approved types and formats (manual)
+  category: management
+  severity: manual
+  applicability:
+    requires_evidence: [server_certs]
+  evidence:
+    - {key: server_certs, command: show crypto-local pki serverCerts}
+    - {key: trusted_cas, command: show crypto-local pki trustedCAs}
+  remediation_hint: "Import the CA-signed server cert (public+private), the trusted CA cert (public key), and any client public cert via supported formats (X509 PEM, DER, PKCS7/PKCS12 encrypted). WebUI is the supported import method; certs cannot be exported."
+  references: [{guide_section: "Importing Certificates", ref: "2302-2328"}]
+
+- id: AOS8-MGMT-TRUSTEDCA-001
+  title: Trusted CA certificate(s) present to validate peer/client certs
+  category: management
+  severity: medium
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [trusted_cas]
+    condition: "require_cert_auth == true"
+  evidence:
+    - {key: trusted_cas, command: show crypto-local pki trustedCAs}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: trusted_ca_present}
+        then: pass
+      - else: manual
+  remediation_hint: "Import the issuing (and signing/intermediate) CA certificate as trustedCA so client/peer certificates can be validated; import the signing CA when importing an intermediate."
+  references: [{guide_section: "Viewing / Inventorying Installed Certificates", ref: "2332-2361"}]
+
+- id: AOS8-MGMT-CERT-INVENTORY-001
+  title: Installed certificate inventory reviewed (no reliance on default cert)
+  category: management
+  severity: informational
+  applicability:
+    requires_evidence: [server_certs]
+  evidence:
+    - {key: server_certs, command: show crypto-local pki serverCerts}
+    - {key: trusted_cas, command: show crypto-local pki trustedCAs}
+  remediation_hint: "Review installed trustedCA / server / public certs: confirm only authorized, current (unexpired, non-revoked) certs are present and CRL/OCSP validation is in place for client certs. Point-in-time inventory."
+  references: [{guide_section: "Viewing / Inventorying Installed Certificates", ref: "2167-2361"}]
+
+# --- Secure file movement: SCP transfer / backup / restore / log copy ------
+- id: AOS8-MGMT-FILETRANSFER-SCP-001
+  title: Cleartext TFTP/FTP not used for file transfers (prefer SCP)
+  category: management
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  # FTP sends credentials in cleartext and TFTP has no authentication; flag any
+  # persisted copy/transfer that uses them for images/configs/backups/logs.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*copy\\s+.*\\b(tftp|ftp):"}
+        then: fail
+      - else: pass
+  remediation_hint: "Use SCP (relies on SSH) for image/config/backup/log transfers: 'copy ... scp: <host> <user> <file>'. Avoid 'copy ... tftp:'/'copy ... ftp:' (cleartext / no auth)."
+  references: [{guide_section: "Use Secure Protocol (SCP) for File Transfers", ref: "2391-2439"}]
+
+- id: AOS8-MGMT-IMAGE-TRANSFER-001
+  title: ArubaOS image transferred to a system partition via secure copy (manual)
+  category: management
+  severity: manual
+  applicability:
+    requires_evidence: [show_version]
+  evidence:
+    - {key: show_version, command: show version}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Download authorized ArubaOS images to a system partition (0|1) using SCP, then confirm 'show image version'/'show boot'. Transfer of an image is an action, not a persistent setting -- verify manually."
+  references: [{guide_section: "Transferring ArubaOS Image Files to a System Partition", ref: "2443-2475"}]
+
+- id: AOS8-MGMT-BACKUP-001
+  title: Flash and configuration backups created and stored off-box (manual)
+  category: management
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  remediation_hint: "backup flash (flashbackup.tar.gz) ; backup config (configbackup.tar.gz) ; copy each off-box via SCP. Whether a current backup exists/was copied is an action history -- verify manually."
+  references: [{guide_section: "Backing Up Flash File System and System Configuration", ref: "2478-2519"}]
+
+- id: AOS8-MGMT-RESTORE-001
+  title: Restore procedure preserves restored config (no save-before-reboot) (manual)
+  category: management
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  remediation_hint: "When restoring a CONFIGURATION backup, unselect 'Save configuration before reboot' so the running config does not overwrite the restored files; reboot to apply. Restore is a procedural action -- verify manually."
+  references: [{guide_section: "Restoring Flash / Configuration", ref: "2532-2567"}]
+
+- id: AOS8-MGMT-LOGCOPY-001
+  title: Log archives copied off the controller for retention (manual)
+  category: management
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  remediation_hint: "tar logs (logs.tar) ; copy off-box via SCP to a retention/collection server. Note this complements (not replaces) live syslog forwarding. Copying logs is an action -- verify manually."
+  references: [{guide_section: "Copying Log Files Off the Controller", ref: "2572-2599"}]

@@ -1,0 +1,208 @@
+# WLAN/802.1X and AP/virtual-AP extended hygiene controls:
+# forwarding-mode tunnel, hide-ssid/deny-bcast, server-derived roles,
+# per-AP VAP exclusion, AP rename/regroup reboot, unique profile names,
+# WLAN-to-AP-group binding, and WLAN VLAN assignment.
+
+- id: AOS8-WLAN-FWDMODE-001
+  title: WLAN forwarding mode is tunnel (not bridge/split-tunnel/decrypt-tunnel)
+  category: wlan
+  severity: high
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: running_config, command: show running-config}
+  # First_match catches any non-tunnel forward-mode anywhere in config before
+  # confirming at least one tunnel VAP exists. No forward-mode line at all
+  # means the default (tunnel) applies, but is undeterminable per-VAP -> manual.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*forward-mode\\s+(bridge|split-tunnel|decrypt-tunnel)\\b"}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*forward-mode\\s+tunnel\\b"}
+        then: pass
+      - else: manual
+  remediation_hint: "wlan virtual-ap <p> ; forward-mode tunnel  (tunnel is the high-security default; remove any bridge/split-tunnel)."
+  references: [{guide_section: "Leave WLAN Forwarding mode = Tunnel", ref: "3725-3727"}]
+
+- id: AOS8-WLAN-VLAN-001
+  title: WLAN users segregated into the intended VLAN (review)
+  category: wlan
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "wlan virtual-ap <p> ; vlan <id>  (confirm each VAP places its user population into the correct VLAN). Intent - manual review."
+  references: [{guide_section: "Assign WLAN users to the intended VLAN", ref: "3732-3783"}]
+
+- id: AOS8-WLAN-VLAN1-001
+  title: Production WLANs are not left on VLAN 1
+  category: wlan
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: running_config, command: show running-config}
+  # Flag any virtual-ap stanza whose 'vlan' line binds the user population to
+  # VLAN 1. The (?:[ \t]+\S.*\n)*? only spans indented continuation lines, so the
+  # match stays inside one virtual-ap stanza and won't reach a 'vlan 1' header.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*wlan\\s+virtual-ap\\s+\\S+\\s*\\n(?:[ \\t]+\\S.*\\n)*?[ \\t]+vlan\\s+1(?!\\d)"}
+        then: fail
+      - else: pass
+  remediation_hint: "Move WLAN virtual-ap bindings off 'vlan 1' to a dedicated user VLAN (e.g. vlan 101)."
+  references: [{guide_section: "Adding the WLAN (virtual-ap) - vlan 1 example", ref: "3781-3794"}]
+
+- id: AOS8-WLAN-HIDESSID-001
+  title: SSID hidden and broadcast probes denied where required
+  category: wlan
+  severity: low
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: wlan_ssid_profile, command: show wlan ssid-profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: all_of
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*hide-ssid\\b"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*deny-bcast\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "wlan ssid-profile <p> ; hide-ssid ; deny-bcast  (suppress beaconing and ignore broadcast probes)."
+  references: [{guide_section: "Optionally hide SSID and deny broadcast probes", ref: "3762-3768"}]
+
+- id: AOS8-WLAN-DEFGROUP-001
+  title: WLANs are not broadcast from the 'default' AP group
+  category: wlan
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ap_group, command: show ap-group}
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: running_config, command: show running-config}
+  # Detect a virtual-ap bound inside the 'default' ap-group stanza. The
+  # (?:[ \t]+\S.*\n)*? only spans the indented body of the ap-group "default"
+  # block, so a virtual-ap line in another ap-group will not be misattributed.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ap-group\\s+\"?default\"?\\s*\\n(?:[ \\t]+\\S.*\\n)*?[ \\t]+virtual-ap\\s+\\S+"}
+        then: fail
+      - else: pass
+  remediation_hint: "Bind each WLAN virtual-ap to a purpose-built ap-group; remove virtual-ap entries from ap-group 'default'."
+  references: [{guide_section: "Do not use the 'default' AP group for broadcasting WLANs", ref: "3723-3724"}]
+
+- id: AOS8-WLAN-VAPEXCLUDE-001
+  title: Sensitive SSIDs excluded from APs in exposed locations
+  category: wlan
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ap_group, command: show ap-group}
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "On exposed/lobby APs use 'excluded-virtual-ap <vap>' to suppress internal SSIDs. (Topology/intent - manual review.)"
+  references: [{guide_section: "Per-AP profile override behavior and VAP exclusion", ref: "3480-3488"}]
+
+- id: AOS8-WLAN-SRVDERIVE-001
+  title: Server-derived role rules reviewed (precede default role)
+  category: wlan
+  severity: informational
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_derivation_user, command: show aaa derivation-rules user}
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: running_config, command: show running-config}
+  # Server-derived roles are optional; when present they override the 802.1x
+  # default role, so their attribute->role mappings must be reviewed for intent.
+  # If no 'set role condition' rules exist, the default role governs -> pass.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*set\\s+role\\s+condition\\b"}
+        then: manual
+      - when: {source: aaa_derivation_user, predicate: regex, arg: "(?im)\\bset\\s+role\\b"}
+        then: manual
+      - else: pass
+  remediation_hint: "Review 'set role condition ... set-value <role>' in server groups; ensure derived roles map only to intended least-privilege roles."
+  references: [{guide_section: "Configure policies and roles - server derivation rules", ref: "3216-3268"}]
+
+- id: AOS8-WLAN-UNIQUENAMES-001
+  title: Unique non-default names used for virtual-AP, SSID, and AAA profiles
+  category: wlan
+  severity: low
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: wlan_ssid_profile, command: show wlan ssid-profile}
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: running_config, command: show running-config}
+  # Flag reliance on the shared 'default' profiles for production WLANs; passing
+  # requires at least one purpose-named virtual-ap profile to exist.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*wlan\\s+virtual-ap\\s+(?!\"?default\"?\\s*$)\\S+"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*wlan\\s+virtual-ap\\s+\\S+"}
+        then: warn
+      - else: manual
+  remediation_hint: "Create uniquely named VAP/SSID/AAA profiles (e.g. AOS-xxx) per WLAN; do not edit shared 'default' profiles."
+  references: [{guide_section: "Assign unique names to each virtual AP, SSID, and AAA profile", ref: "3520-3521"}]
+
+- id: AOS8-AP-NAME-001
+  title: APs renamed from their default MAC-based name
+  category: ap
+  severity: low
+  applicability:
+    requires_evidence: [ap_database]
+  evidence:
+    - {key: ap_database, command: show ap database}
+    - {key: running_config, command: show running-config}
+  # Default AP name when unprovisioned = the AP Ethernet MAC (colon hex).
+  # Any AP whose Name column is a MAC address is still using the default.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: ap_database, predicate: regex, arg: "(?im)^\\s*([0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b"}
+        then: warn
+      - else: pass
+  remediation_hint: "Provision each AP with a unique location-based name (ap-rename); the new name takes effect after the AP reboots."
+  references: [{guide_section: "Assign each AP a unique name", ref: "3363-3378"}]
+
+- id: AOS8-AP-RENAME-REBOOT-001
+  title: AP renames scheduled during low/no client traffic (reboot required)
+  category: ap
+  severity: manual
+  applicability:
+    requires_evidence: [ap_database]
+  evidence:
+    - {key: ap_database, command: show ap database}
+  remediation_hint: "Renaming an AP requires an AP reboot before the new name applies; perform during a maintenance window with minimal client impact."
+  references: [{guide_section: "AP rename requires AP reboot", ref: "3377-3378"}]
+
+- id: AOS8-AP-REGROUP-REBOOT-001
+  title: AP regroup operations scheduled during low/no client traffic (auto-reboot)
+  category: ap
+  severity: manual
+  applicability:
+    requires_evidence: [ap_database]
+  evidence:
+    - {key: ap_database, command: show ap database}
+    - {key: ap_group, command: show ap-group}
+  remediation_hint: "ap-regroup auto-reboots the AP (queued until it reconnects if offline); schedule reassignments during a maintenance window."
+  references: [{guide_section: "Reassign APs out of 'default' via ap-regroup (auto-reboot)", ref: "3434-3463"}]

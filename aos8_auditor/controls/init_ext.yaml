@@ -1,0 +1,162 @@
+# Startup & initial-setup controls (extension).
+# Country code, switch role, serial console, config-persist/pending, manual
+# clock/timezone, startup-script completion, and no-form negation hygiene.
+# (Admin-password and hostname are covered by AOS8-INIT-001 / AOS8-INIT-002.)
+
+- id: AOS8-INIT-COUNTRY-001
+  title: Regulatory country code set to an allowed (restricted federal) value
+  category: initial-setup
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  # The Country Code is chosen during the Startup Script and cannot be changed
+  # later from CLI/WebUI. Restricted/federal SKUs only accept the listed codes.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*country\\s+(US|PR|GU|VI|MP|AS|FM|MH)\\b"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*country\\s+\\S+"}
+        then: fail
+      - else: manual
+  remediation_hint: "Country code is locked after the Startup Script (re-run startup after 'write erase all' to change). Restricted units accept only US|PR|GU|VI|MP|AS|FM|MH."
+  references: [{guide_section: "Startup Script - Country Code", ref: "707-764"}]
+
+- id: AOS8-INIT-COUNTRY-002
+  title: Country code matches the site's regulatory authorization
+  category: initial-setup
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Confirm the configured country code matches the regulatory domain the site is authorized to operate in; it is immutable after the Startup Script."
+  references: [{guide_section: "Startup Script - Country Code (immutable)", ref: "85-92, 707-764"}]
+
+- id: AOS8-INIT-ROLE-001
+  title: Switch role consistent with the deployment architecture
+  category: initial-setup
+  severity: informational
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  # Role (master|standalone|md) is an architecture decision; the running-config
+  # does not always carry an explicit role marker, so absent evidence -> manual.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*switch-role\\s+(master|standalone|md)\\b"}
+        then: pass
+      - else: manual
+  remediation_hint: "Verify the switch role (master|standalone|md) matches the intended Mobility Master / standalone / managed-device design; set during the Startup Script."
+  references: [{guide_section: "Startup Script - Switch Role", ref: "114-122"}]
+
+- id: AOS8-INIT-PERSIST-001
+  title: No unsaved (pending) configuration changes
+  category: initial-setup
+  severity: medium
+  applicability:
+    requires_evidence: [config_pending]
+  evidence:
+    - {key: config_pending, command: show configuration pending}
+  # A leading caret (^) on the prompt / non-empty 'show configuration pending'
+  # means changes are applied to the running config but NOT saved to flash; a
+  # reboot would lose them. Empty output = nothing pending = pass.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: config_pending, predicate: regex, arg: "(?im)^\\s*(no pending|there are no pending|no changes|configuration is up to date)"}
+        then: pass
+      # A real pending block lists config-directive lines; a bare header/title
+      # (e.g. 'Pending Configuration Changes:') is NOT a pending change, so the
+      # fail/warn signal must be a positive directive match, not a bare \\S.
+      - when: {source: config_pending, predicate: regex, arg: "(?im)^\\s*(no\\s+\\S|interface|ip|aaa|wlan|vlan|firewall|crypto|snmp-server|ntp|logging|user-role|netdestination|web-server|vrrp|controller-ip|hostname|loginsession|banner|set)\\b"}
+        then: warn
+      - else: pass
+  remediation_hint: "configure terminal ; end ; write memory  (persists pending changes to flash; the caret '^' on the prompt clears)."
+  references: [{guide_section: "Apply and Persist Configuration Changes", ref: "65-73, 429-547"}]
+
+- id: AOS8-INIT-TIMEZONE-001
+  title: Clock time zone configured (IANA zone)
+  category: initial-setup
+  severity: low
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*clock\\s+timezone\\s+\\S+"}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; clock timezone <IANA-zone> <utc-offset>  (e.g. clock timezone America/Chicago)."
+  references: [{guide_section: "Startup Script - IANA Time Zone", ref: "94-102"}]
+
+- id: AOS8-INIT-CLOCK-001
+  title: System clock accurate (manual set) when NTP is not used
+  category: initial-setup
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ntp_status, command: show ntp status}
+    - {key: running_config, command: show running-config}
+  # 'clock set' is a point-in-time enable-mode action that is not stored in
+  # running-config, so accuracy cannot be machine-verified from read-only output.
+  # NTP with authentication is preferred (see AOS8-GLOBAL-NTP-001).
+  remediation_hint: "Prefer authenticated NTP. If set manually: clock set <year> <Month> <day> <hh> <mm> <ss>  and confirm 'show clock' is correct."
+  references: [{guide_section: "Set System Clock (Manual) / Time Zone", ref: "43-51, 104-112"}]
+
+- id: AOS8-INIT-CONSOLE-001
+  title: Serial console terminal settings (9600 8-N-1, no flow control)
+  category: initial-setup
+  severity: manual
+  evidence:
+    - {key: running_config, command: show running-config}
+  # Terminal-emulator line settings live on the operator's workstation, not on
+  # the controller, so this is an attestation control.
+  remediation_hint: "Set the terminal program to 9600 baud, 8 data bits, no parity, 1 stop bit, no flow control; restrict physical access to the front-panel serial port."
+  references: [{guide_section: "Serial Console Communication Settings", ref: "563-571, 1224-1230"}]
+
+- id: AOS8-INIT-STARTUP-001
+  title: Startup Script completed (core settings present after factory/write-erase)
+  category: initial-setup
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  # On FIPS-factory units and after 'write erase[/all]', the Startup Script must
+  # be completed before access is granted; its outputs (hostname, country,
+  # timezone, default gateway) should all be present in the running config.
+  logic:
+    type: all_of
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*hostname\\s+\\S+"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*country\\s+\\S+"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ip\\s+default-gateway\\s+\\S+"}
+        then: pass
+      - else: fail
+  remediation_hint: "Complete the Startup Script (system name, switch role, mgmt VLAN/IP/mask, default gateway, country, time zone, time/date, admin password); accepting it reboots the controller."
+  references: [{guide_section: "Startup Script Completion (FIPS-factory / write erase)", ref: "133-142, 679-774"}]
+
+- id: AOS8-INIT-NEGATE-001
+  title: No-form negation used to remove unwanted/insecure configuration
+  category: initial-setup
+  severity: informational
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: rights, command: show rights}
+    - {key: running_config, command: show running-config}
+  # General config-management hygiene: leftover unused user-roles or stale
+  # entries should be negated ('no <command>'). What is "unwanted" is intent-
+  # driven, so this is a review/attestation control.
+  remediation_hint: "Review running-config for unused user roles / stale entries and remove them with the 'no' form (e.g. no user-role <name>); 'no ?' lists negatable commands."
+  references: [{guide_section: "Use 'no' Form to Remove Configuration", ref: "123-132, 640-666"}]

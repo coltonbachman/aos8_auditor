@@ -1,0 +1,21 @@
+# Operator answers for controls that cannot be proven from a read-only account
+# (password value, EAP type, physical/TEL, backup process, "unused" ports, etc.).
+# A manual control with a matching entry takes the attested status and is marked
+# classification_basis=attestation in the report. Copy to attestations.yaml and
+# pass with: aos8-audit ... --attestations attestations.yaml
+#
+# control_id:
+#   status: pass | fail | warn | not_applicable
+#   justification: "who attested, what was verified, date"
+
+AOS8-INIT-001:
+  status: pass
+  justification: "Admin password rotated from default during provisioning — J.Doe 2026-05-01"
+
+AOS8-PHYS-TEL-001:
+  status: not_applicable
+  justification: "Virtual Mobility Controller — no physical TELs apply"
+
+AOS8-NET-PORT-001:
+  status: pass
+  justification: "Port plan reviewed; all unused ports administratively shut — net-eng 2026-05-02"

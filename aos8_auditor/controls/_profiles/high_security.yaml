@@ -1,0 +1,9 @@
+name: high_security
+extends: baseline
+# In a high-security posture, "recommended" hardening becomes required:
+# escalate the soft warns to fails.
+verdict_overrides:
+  AOS8-MGMT-SSH-PUBKEY-001: {warn: fail}
+  AOS8-GLOBAL-NTP-001: {warn: fail}
+  AOS8-MGMT-WEBUI-CERTAUTH-001: {warn: fail}
+severity_overrides: {}

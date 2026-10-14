@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aos8-auditor"
+version = "1.0.0"
+description = "Read-only ArubaOS 8 controller security hardening auditor"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+dependencies = [
+    "pydantic>=2.5",
+    "netmiko>=4.3",
+    "ruamel.yaml>=0.18",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+aos8-audit = "aos8_auditor.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["aos8_auditor*"]
+
+[tool.setuptools.package-data]
+aos8_auditor = ["data/*.yaml", "controls/**/*.yaml", "compliance/*.yaml", "advisories/*.yaml", "advisories/*.csv", "*.example.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,124 @@
+# Management-plane hardening controls.
+- id: AOS8-MGMT-SSH-PUBKEY-001
+  title: SSH public-key authentication enabled
+  category: management
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: ssh_pubkey_auth}
+        then: pass
+      - else: warn
+  remediation_hint: "ssh mgmt-auth public-key ; map mgmt-user to a client cert/public key."
+  references: [{guide_section: "Public Key Authentication for SSH Access", ref: "1916-1990"}]
+
+- id: AOS8-MGMT-LOCALAUTH-001
+  title: Local management authentication disabled (external-only)
+  category: management
+  severity: high
+  description: >-
+    Gated to the high-security/FIPS profiles on purpose. The 2023 Controller
+    Hardening Guide documents 'mgmt-user localauth-disable' but explicitly PREFERS
+    the alternative — leave local auth enabled and set the local 'admin' account to
+    a randomly generated password nobody knows — because with local auth disabled
+    nobody can reach the management interface if the authentication server becomes
+    unavailable. Baseline deployments should meet AOS8-MGMT-CENTRALAUTH-001
+    instead. If you do disable local auth, redundant authentication servers are
+    mandatory.
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [mgmt_localauth]
+    condition: "require_external_only_auth == true"
+  evidence:
+    - {key: mgmt_localauth, command: show mgmt-user local-authentication-mode}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: local_auth_disabled}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: local_auth_disabled}
+        then: pass
+      - else: fail
+  remediation_hint: "no mgmt-user localauth  (ensure an emergency-access policy AND redundant auth servers first)"
+  references:
+    - {guide_section: "Disabling Authentication of Local Management User Accounts", ref: "1992-2066", document: federal_2020}
+    - {guide_section: "Centralized Authentication and Authorization", page: 26, document: controller_2023}
+
+- id: AOS8-MGMT-PWDPOL-001
+  title: Management password policy enabled (min length >= 15 for federal posture)
+  category: management
+  severity: high
+  description: >-
+    A management password policy must be enabled — with none, ArubaOS accepts any
+    administrative password, which both guides treat as a real finding. The two
+    guides then set different length bars: the 2023 Controller Hardening Guide's
+    recommended policy uses 'password-min-length 8' (its sample output shows 10),
+    while the 2020 Federal Technology Guide requires >= 15. A policy that is
+    enabled but shorter than 15 therefore reports WARN, not FAIL: it satisfies the
+    Controller guide baseline and falls short only of the federal/high-security
+    posture. No policy at all is a FAIL against both.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: password_policy, command: show aaa password-policy mgmt}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_false, arg: password_policy_enabled}
+        then: fail
+      - when: {source: fact, predicate: fact_unknown, arg: password_policy_ok}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: password_policy_ok}
+        then: pass
+      - when: {source: fact, predicate: fact_unknown, arg: password_min_length}
+        then: manual
+      - else: warn
+  remediation_hint: "aaa password-policy mgmt ; enable ; password-min-length 15 (federal/high-security; 8 is the 2023 Controller guide baseline) ; password-not-username ; password-lock-out 3 ; upper/lower/digit/special minimums"
+  references:
+    - {guide_section: "Management Password Policy", ref: "2068-2151", document: federal_2020}
+    - {guide_section: "Password Policy", page: 25, document: controller_2023}
+
+- id: AOS8-MGMT-CERT-001
+  title: Default WebUI/server certificate replaced
+  category: management
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: server_certs, command: show crypto-local pki serverCerts}
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "switch-cert\\s+(default|securelogin|default-self-signed|factory-cert)(\\s|$)"}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "switch-cert\\s+\\S+"}
+        then: pass
+      - else: manual
+  remediation_hint: "Import a CA-issued site cert and point web-server profile switch-cert at it (not the default)."
+  references: [{guide_section: "Managing Certificates", ref: "2155-2228"}]
+
+- id: AOS8-MGMT-WEBUI-CERTAUTH-001
+  title: WebUI certificate authentication enabled
+  category: management
+  severity: medium
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "mgmt-auth\\s+certificate"}
+        then: pass
+      - else: warn
+  remediation_hint: "web-server profile ; mgmt-auth certificate ; switch-cert <cert> ; map mgmt-user to trusted CA + client cert serial."
+  references: [{guide_section: "Certificate Authentication for WebUI Access", ref: "1791-1914"}]

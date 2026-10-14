@@ -1,0 +1,94 @@
+name: hipaa
+framework: HIPAA Security Rule
+version: "45 CFR 164.308/164.310/164.312"
+description: >
+  Crosswalk of ArubaOS 8 WLAN-controller hardening controls to the HIPAA
+  Security Rule (45 CFR Part 164, Subpart C). It focuses on the 164.312
+  technical safeguards (access control, audit controls, integrity,
+  person/entity authentication, transmission security) plus the 164.308
+  administrative and 164.310 physical safeguards a WLAN controller's
+  configuration can directly evidence.
+disclaimer: >
+  ADVISORY crosswalk of the ArubaOS 8 WLAN-controller-configuration slice only.
+  It is NOT a HIPAA certification, attestation, or legal opinion. A requirement
+  shown MET here typically still needs additional non-WLAN evidence (workforce
+  policy, risk analysis, business-associate agreements, host/endpoint, EHR
+  application, and physical-facility controls) to satisfy the standard.
+  Validate the full implementation with a qualified assessor.
+profile: high_security
+org_profile_defaults:
+  wip_required: true          # 164.308(a)(1)(ii)(D) / 164.308(a)(6) wireless monitoring
+  fips_required: true         # 164.312(a)(2)(iv) / (e)(2)(ii) encryption of ePHI
+requirements:
+  - id: "164.308(a)(1)(ii)(D)"
+    title: Information system activity review (log review, audit mechanisms)
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-GLOBAL-NTP-001, AOS8-WIP-DASHBOARD-001, 
+          AOS8-MGMT-LOGCOPY-001]
+  - id: "164.308(a)(3)(ii)(A)"
+    title: Authorization and/or supervision of workforce access (role-based access)
+    controls: [AOS8-ADMIN-POLICY-001, AOS8-ADMIN-POLICY-002, AOS8-ROLE-DEFAULTROLE-001, 
+          AOS8-ROLE-INITROLE-001, AOS8-ROLE-POLICY-001]
+  - id: "164.308(a)(4)(ii)(B)"
+    title: Access authorization (policy-based grant of access to ePHI)
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-STATEFUL-001, AOS8-ROLE-SRVDERIV-001, 
+          AOS8-LIC-PEFV-001, AOS8-NET-UNTRUSTED-PORT-001]
+  - id: "164.308(a)(4)(ii)(C)"
+    title: Access establishment and modification (network segmentation of access paths)
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-WLAN-VLAN-001, 
+          AOS8-WLAN-VLAN1-001, AOS8-NET-DEFAULTVLAN-001]
+  - id: "164.308(a)(5)(ii)(D)"
+    title: Password management (strong management password policy)
+    controls: [AOS8-MGMT-PWDPOL-001, AOS8-INIT-001]
+  - id: "164.308(a)(6)(ii)"
+    title: Response and reporting — detection of security incidents (wireless IDS/rogue)
+    controls: [AOS8-WIP-LIC-001, AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-CLASSRULES-LIC-001, 
+          AOS8-WIP-CONTAINMENT-001, AOS8-WIP-BLACKLIST-ENABLE-001, AOS8-WIP-MASTER-001]
+  - id: "164.310(a)(2)(ii)"
+    title: Facility security plan (controller placement / installation)
+    controls: [AOS8-PHYS-INSTALL-001, AOS8-PHYS-MOUNT-001, AOS8-PHYS-RECEIVE-001, AOS8-PHYS-CO-001]
+  - id: "164.310(c)"
+    title: Workstation/device security (tamper-evident hardware safeguards)
+    controls: [AOS8-PHYS-SECKIT-001, AOS8-PHYS-TEL-001, AOS8-PHYS-TELLOG-001, AOS8-PHYS-CONSOLE-001, 
+          AOS8-GLOBAL-LCD-001]
+  - id: "164.312(a)(1)"
+    title: Access control — unique policy-enforced access to ePHI systems
+    controls: [AOS8-ADMIN-POLICY-001, AOS8-ADMIN-POLICY-002, AOS8-ROLE-POLICY-001, 
+          AOS8-ROLE-STATEFUL-001, AOS8-NET-UNTRUSTED-PORT-001, AOS8-ROLE-NETDEST-MEMBERSHIP-001]
+  - id: "164.312(a)(2)(i)"
+    title: Unique user identification (per-user authentication, no shared/local fallback)
+    controls: [AOS8-MGMT-LOCALAUTH-001, AOS8-AUTH-SERVER-001, AOS8-AUTH-LOCALDB-DOT1X-001, 
+          AOS8-DOT1X-001, AOS8-MGMT-SSH-PUBKEY-001]
+  - id: "164.312(a)(2)(iii)"
+    title: Automatic logoff (idle session termination)
+    controls: [AOS8-GLOBAL-TIMEOUT-001, AOS8-GLOBAL-TIMEOUT-002]
+  - id: "164.312(a)(2)(iv)"
+    title: Encryption and decryption (strong crypto / FIPS for ePHI at the WLAN edge)
+    controls: [AOS8-GLOBAL-FIPS-001, AOS8-WLAN-001, AOS8-AUTH-EAP-TYPE-001, 
+          AOS8-AUTH-EAP-TLS-CERTS-001, AOS8-WLAN-FWDMODE-001]
+  - id: "164.312(b)"
+    title: Audit controls (record and examine activity in systems handling ePHI)
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-GLOBAL-NTP-001, AOS8-INIT-CLOCK-001, 
+          AOS8-MGMT-LOGCOPY-001]
+  - id: "164.312(c)(1)"
+    title: Integrity — protect ePHI from improper alteration/destruction
+    controls: [AOS8-MGMT-FILETRANSFER-SCP-001, AOS8-MGMT-IMAGE-TRANSFER-001, AOS8-INIT-PERSIST-001]
+  - id: "164.312(c)(2)"
+    title: Mechanism to authenticate ePHI (trusted-source transfer / cert validation)
+    controls: [AOS8-MGMT-FILETRANSFER-SCP-001, AOS8-MGMT-TRUSTEDCA-001, AOS8-MGMT-CERT-IMPORT-001, 
+          AOS8-MGMT-CSR-001]
+  - id: "164.312(d)"
+    title: Person or entity authentication (verify identity before access)
+    controls: [AOS8-AUTH-SERVER-001, AOS8-AUTH-SERVERGROUP-001, AOS8-AUTH-EAP-TYPE-001, 
+          AOS8-AUTH-EAP-TLS-CERTS-001, AOS8-WLAN-001, AOS8-MGMT-WEBUI-CERTAUTH-001]
+  - id: "164.312(e)(1)"
+    title: Transmission security — guard against unauthorized access to ePHI in transit
+    controls: [AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-MGMT-SSH-VERSION-001, 
+          AOS8-GLOBAL-SNMP-001, AOS8-MGMT-CERT-001, AOS8-WLAN-FWDMODE-001]
+  - id: "164.312(e)(2)(i)"
+    title: Integrity controls in transmission (secure transport, server group integrity)
+    controls: [AOS8-AUTH-LDAP-LDAPS-001, AOS8-AUTH-TACACS-SESSIONAUTH-001, 
+          AOS8-AUTH-RADIUS-CLIENTREG-001]
+  - id: "164.312(e)(2)(ii)"
+    title: Encryption of ePHI in transit (WPA2-Enterprise / strong EAP over the air)
+    controls: [AOS8-WLAN-001, AOS8-AUTH-EAP-TYPE-001, AOS8-AUTH-EAP-TLS-CERTS-001, 
+          AOS8-GLOBAL-FIPS-001, AOS8-MGMT-CERT-001]

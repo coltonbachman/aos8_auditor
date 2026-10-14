@@ -1,0 +1,331 @@
+# ArubaOS 8 vulnerability-scanner false-positive corpus.
+#
+# Transcribed from the ArubaOS 8 Controller Hardening Guide (revision 10,
+# January 2023), "Common False Positives" (p.15-18).
+#
+# `vendor_position` is the guide's own wording, kept verbatim so an operator can
+# hand it to an auditor and check it against the PDF. Everything else is
+# structure for matching a scanner report against it.
+#
+# `verdict` is the ONE derived field, and the distinction it draws is the whole
+# point of the section:
+#
+#   false_positive   the guide says the finding does not apply to ArubaOS
+#   action_required  the guide says the finding is REAL and the admin must fix it
+#   accepted_risk    cannot be fixed; the vendor has judged the risk acceptable
+#   by_design        the behaviour is an intentional tradeoff or standards mandate
+#
+# NOTHING here is scored and nothing here suppresses a control. A scanner CVE
+# matching a false_positive row is context for a triage conversation, not a
+# clean bill of health: the guide's position is about ArubaOS as shipped, and
+# your controller's version, licensed features and configuration still matter.
+#
+# `mitigating_controls` names audit controls that CLOSE the scanner finding even
+# where the guide calls it a false positive (the finding goes away, and the
+# argument with the auditor goes away with it). `remediating_controls` names the
+# controls that FIX an action_required row.
+
+version: "controller_2023_rev10"
+
+preamble: >-
+  The most common type of false positive seen by vulnerability scanners occurs
+  when the scanner looks only at a version number presented as part of a protocol
+  handshake. For example, a scan against a controller's SSH service may indicate
+  that the SSH server is OpenSSH version 5.8; if the scanning tool's database
+  finds known vulnerabilities for OpenSSH 5.8, it will report that the controller
+  is vulnerable. Most vulnerability scanners do not actually attempt to exploit
+  vulnerabilities, so the resulting report should be viewed as a list of POSSIBLE
+  vulnerabilities. Aruba incorporates several open-source packages within ArubaOS,
+  such as Apache and OpenSSH. In the interest of software stability, Aruba
+  typically does not update open-source packages to their latest version when a
+  security vulnerability is found - in addition to security fixes there may be
+  thousands of other source changes that could introduce bugs. Instead, Aruba
+  patches specific vulnerabilities by fixing only the flaw itself. This is why a
+  banner-derived version number is a poor predictor of exposure on ArubaOS.
+
+entries:
+
+- id: openssh
+  service: OpenSSH
+  page: 15
+  verdict: false_positive
+  cves:
+    - CVE-2018-15473
+    - CVE-2016-10012
+    - CVE-2016-10011
+    - CVE-2016-10010
+    - CVE-2016-10009
+    - CVE-2016-6210
+    - CVE-2016-3115
+    - CVE-2016-0778
+    - CVE-2016-0777
+    - CVE-2015-6563
+    - CVE-2015-6564
+    - CVE-2015-5600
+    - CVE-2015-5352
+    - CVE-2014-1692
+    - CVE-2014-2532
+    - CVE-2014-2653
+    - CVE-2011-5000
+    - CVE-2011-4327
+    - CVE-2010-5107
+    - CVE-2010-4755
+    - CVE-2008-3259
+    - CVE-2007-4752
+    - CVE-2007-2243
+    - CVE-2007-2768
+    - CVE-2004-1653
+  finding_patterns:
+    - openssh
+    - ssh server version
+    - ssh banner
+  vendor_position: >-
+    These vulnerabilities were either patched in source code or are nonapplicable
+    for ArubaOS due to configuration or limited use of a particular feature. No
+    currently supported version of ArubaOS contains these vulnerabilities.
+  mitigating_controls: []
+  remediating_controls: []
+
+- id: ssh-aes-cbc
+  service: SSH
+  page: 15
+  verdict: false_positive
+  cves: [CVE-2008-5161]
+  finding_patterns:
+    - aes-cbc
+    - cbc mode cipher
+    - ssh cbc
+    - ssh weak mac
+    - hmac-sha1-96
+  vendor_position: >-
+    Numerous vulnerability scanners report that the use of AES-CBC in SSH is not
+    secure. See the Aruba community thread for a full explanation
+    (community.arubanetworks.com, GroupId=7, MID=8502). Note that beginning in
+    ArubaOS 6.5.4.4, it is possible to disable AES-CBC.
+  mitigating_controls: [AOS8-CRYPTO-SSH-CIPHERS-001]
+  remediating_controls: []
+
+- id: sssd
+  service: Sssd
+  page: 15
+  verdict: false_positive
+  cves: [CVE-2009-2410]
+  finding_patterns:
+    - sssd
+  vendor_position: ArubaOS does not include this service.
+  mitigating_controls: []
+  remediating_controls: []
+
+- id: dns-responder
+  service: DNS / Nameserver
+  page: 16
+  verdict: false_positive
+  cves: [CVE-2008-1447]
+  finding_patterns:
+    - cache snooping
+    - recursive quer
+    - dns amplification
+    - traffic amplification
+    - open resolver
+    - dns server spoofed request
+  vendor_position: >-
+    ArubaOS includes a "DNS responder" that listens on UDP port 53. Any query sent
+    to this responder will result in a response that contains the controller's IP
+    address. Vulnerability scanners may report that this service responds to
+    recursive queries, that it allows cache snooping, or that it enables traffic
+    amplification attacks. It is important to note that this service is not an
+    actual DNS server, and these warnings may be safely ignored. Recommend using
+    "no ip domain lookup" (controller restart required).
+  mitigating_controls: [AOS8-PORTS-DNS-RESPONDER-001]
+  remediating_controls: []
+
+- id: web-server
+  service: Web server
+  page: 16
+  verdict: false_positive
+  cves: [CVE-2013-3587, CVE-2012-0053, CVE-2002-0840]
+  finding_patterns:
+    - mod_info
+    - error page xss
+    - wildcard dns
+    - phpcms
+    - webglimpse
+    - wordpress
+    - comicpress
+    - sodahead
+    - http connect
+    - meta refresh
+    - cross-site scripting
+    - strict-transport-security
+    - content-security-policy
+    - httponly
+    - secure cookie
+  vendor_position: >-
+    Warnings such as "Apache server mod_info is publicly available", error page
+    XSS using wildcard DNS, and warnings related to PHP / WebGlimpse / phpCMS /
+    WordPress / ComicPress / SodaHead may be reported. Very often, scans are run
+    against a controller's Captive Portal interfaces (ports 8080, 8081, 8088);
+    all requests to these result in a redirect/refresh and the request contents
+    are reflected in the response inside an HTTP "meta" refresh tag, which a
+    number of scanners incorrectly flag as Cross-Site Scripting because they do
+    not parse the meta tag. Because all requests to these interfaces are answered
+    regardless of URL, the scanner also incorrectly identifies a web application
+    as present. Some scanners report the HTTP CONNECT method as a vulnerability:
+    ArubaOS is designed to work with web proxies for captive portal clients and
+    CONNECT methods are redirected from port 8088 to the controller's own port
+    8080 or 8081 - expected behaviour, not a vulnerability - and the HTTP 200
+    response ArubaOS issues alongside meta-refresh content falsely triggers
+    scanners that look for a 2xx/3xx reply. Missing HTTP Strict-Transport-Security
+    header was corrected under bug 177420 and is fixed in 6.5.4.13 and later.
+    Missing HTTP Content-Security-Policy header is an intentional design choice
+    (bug 177308) - it caused interoperability problems with certain browsers, so
+    it was removed. The "Secure" and "HttpOnly" session-cookie attributes come
+    into play after authentication, so unauthenticated scans may not see them.
+  mitigating_controls: [AOS8-PORTS-CAPTIVE-PORTAL-001]
+  remediating_controls: []
+
+- id: tls-ssl
+  service: TLS / SSL
+  page: 17
+  verdict: false_positive
+  cves:
+    - CVE-2015-4000
+    - CVE-2016-2183
+    - CVE-2014-8730
+    - CVE-2014-3566
+    - CVE-2014-0224
+    - CVE-2014-0160
+    - CVE-2013-0169
+    - CVE-2011-3389
+    - CVE-2009-3555
+  finding_patterns:
+    - beast
+    - poodle
+    - logjam
+    - sweet32
+    - heartbleed
+    - lucky13
+    - lucky 13
+    - 3des
+    - ssl 3.0
+    - sslv3
+    - renegotiation
+  vendor_position: >-
+    CVE-2011-3389 ("BEAST") is a client-side vulnerability and as such cannot be
+    "fixed" on the server side. To mitigate, disable the use of TLS 1.0 and TLS
+    1.1, as described in this guide; CBC ciphers may also be disabled on the
+    client side as mitigation. CVE-2014-3566 ("Poodle") is a vulnerability in SSL
+    3.0 - older versions of ArubaOS allowed SSL 3.0 to be disabled, newer versions
+    remove SSL 3.0 completely. CVE-2015-4000 ("Logjam") is not a vulnerability
+    within ArubaOS. Numerous vulnerability scanners appear to report that all TLS
+    servers are vulnerable, even when they are not. Some scanners report ArubaOS
+    as vulnerable to CVE-2016-2183 ("SWEET32"); since mid-2016, 3DES support was
+    removed from ArubaOS, so this is a false positive.
+  mitigating_controls: [AOS8-CRYPTO-TLS-001, AOS8-CRYPTO-WEBCIPHERS-001]
+  remediating_controls: []
+
+- id: tls-ssl-certificate
+  service: TLS/SSL Certificate
+  page: 17
+  # NOT a false positive. The guide is explicit: "These warnings are NOT false
+  # positives, but action from the administrator is required to correct the
+  # problem." Anything that presented this row as dismissible would be actively
+  # harmful, so it carries no CVEs and routes to the certificate control.
+  verdict: action_required
+  cves: []
+  finding_patterns:
+    - untrusted tls/ssl server x.509 certificate
+    - certificate subject cn does not match
+    - sha-1 based signature
+    - certificate modulus less than 2048
+    - ssl certificate name mismatch
+    - self-signed certificate
+    - securelogin.arubanetworks.com
+  vendor_position: >-
+    Warnings such as "Untrusted TLS/SSL server X.509 certificate", "X.509
+    Certificate Subject CN Does Not Match the Entity Name", "SHA-1 based Signature
+    in TLS/SSL Server X.509 Certificate", "TLS Server Certificate Modulus less
+    than 2048 bits" and "SSL Certificate Name Mismatch" may be reported. ArubaOS
+    ships with a factory-default X.509 certificate called
+    "securelogin.arubanetworks.com". This certificate should not be used in
+    production networks. Typically, warning messages produced by vulnerability
+    scanners are related to this certificate. Administrator should properly
+    install a unique X.509 certificate, as described in this guide, to eliminate
+    these warnings. These warnings are NOT false positives, but action from the
+    administrator is required to correct the problem.
+  mitigating_controls: []
+  remediating_controls: [AOS8-MGMT-CERT-001]
+
+- id: ip-stack
+  service: IP stack
+  page: 17
+  verdict: accepted_risk
+  cves: [CVE-2004-0230, CVE-2002-0510, CVE-1999-0524]
+  finding_patterns:
+    - tcp sequence number approximation
+    - udp constant identification field
+    - udp ip id zero
+    - icmp timestamp
+    - tcp timestamp
+  vendor_position: >-
+    These items are labeled, respectively, as "TCP sequence number approximation",
+    "UDP constant identification field / UDP IP ID Zero" and "TCP / ICMP timestamp
+    response". While by their nature these cannot be fixed, Aruba has judged that
+    the risk of exploitation is low enough that no further action is required.
+  mitigating_controls: []
+  remediating_controls: []
+
+- id: cryptography
+  service: Cryptography
+  page: 18
+  verdict: by_design
+  cves: []
+  finding_patterns:
+    - weak mac
+    - weak cipher
+    - des and idea cipher
+    - cipher block chaining ciphers
+    - static key cipher
+    - insecure tls 1.0
+    - tls_rsa_
+  vendor_position: >-
+    Warnings such as "Weak MAC", "Weak ciphers in use", "TLS Server Supports DES
+    and IDEA Cipher Suites", "TLS Server Supports Cipher Block Chaining Ciphers",
+    "TLS Server Supports use of Static Key Ciphers" and "TLS Server Supports
+    Insecure TLS 1.0" may be reported. In general, Aruba has spent significant
+    time researching various cryptographic protocols and believes that products
+    are using a secure configuration. In some cases the most secure settings
+    cannot be used, to achieve compatibility with a wide range of client systems
+    (e.g. support for static key cipher suites such as TLS_RSA_*), so the
+    resulting configuration is a reasonable tradeoff. In other cases, the
+    international security standard Common Criteria mandates which cipher suites
+    must be supported.
+  mitigating_controls: [AOS8-CRYPTO-TLS-001, AOS8-CRYPTO-WEBCIPHERS-001, AOS8-CRYPTO-SSH-CIPHERS-001]
+  remediating_controls: []
+
+- id: jquery
+  service: jQuery
+  page: 18
+  verdict: false_positive
+  cves:
+    - CVE-2020-11023
+    - CVE-2020-11022
+    - CVE-2020-7656
+    - CVE-2019-11358
+    - CVE-2019-5428
+    - CVE-2017-16011
+    - CVE-2014-6071
+    - CVE-2012-6708
+    - CVE-2011-4969
+  finding_patterns:
+    - jquery
+  vendor_position: >-
+    Several Aruba UI components make use of the jQuery package. The versions of
+    jQuery in use may contain cross-site scripting vulnerabilities. Aruba has
+    analyzed these potential vulnerabilities and has found no attack vector that
+    would allow the vulnerabilities to be triggered. ArubaOS 8.7 contains an
+    upgraded version of the jQuery package; because of significant complexity
+    involved in implementing the upgraded package, the change will not be
+    backported to earlier ArubaOS versions.
+  mitigating_controls: []
+  remediating_controls: []

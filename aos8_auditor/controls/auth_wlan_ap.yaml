@@ -1,0 +1,112 @@
+# External authentication, WLAN/802.1X, and AP-hygiene controls.
+- id: AOS8-AUTH-SERVER-001
+  title: External authentication server (RADIUS/LDAP/TACACS) configured and enabled
+  category: auth
+  severity: high
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_auth_servers, command: show aaa authentication-server all}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: external_auth_present}
+        then: pass
+      - else: fail
+  remediation_hint: "aaa authentication-server radius <name> ; host <ip> ; key <secret> ; enable"
+  references: [{guide_section: "Configuring External Servers", ref: "3015-3134"}]
+
+- id: AOS8-WLAN-001
+  title: Employee WLAN uses WPA2-Enterprise (802.1X), not PSK/open
+  category: wlan
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: wlan_ssid_profile, command: show wlan ssid-profile}
+    - {key: running_config, command: show running-config}
+  # Order matters: a weak SSID must be caught even when a secure SSID also
+  # exists, so the open/WEP and PSK clauses precede the wpa2-aes pass clause.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "opmode\\s+(open|static-wep)"}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "opmode\\s+(wpa2-psk|wpa-psk)"}
+        then: warn
+      - when: {source: running_config, predicate: regex, arg: "opmode\\s+wpa2-aes"}
+        then: pass
+      - else: manual
+  remediation_hint: "wlan ssid-profile <p> ; opmode wpa2-aes ; bind an 802.1X AAA profile + RADIUS server group."
+  references: [{guide_section: "Virtual APs / 802.1x Authentication", ref: "3659-3796"}]
+
+- id: AOS8-DOT1X-001
+  title: AAA profile has 802.1X auth profile, server group, and default role
+  category: wlan
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: aaa_profile_complete}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: aaa_profile_complete}
+        then: pass
+      - else: fail
+  remediation_hint: "aaa profile <p> ; authentication-dot1x <prof> ; dot1x-default-role <role> ; dot1x-server-group <grp>"
+  references: [{guide_section: "Configuring 802.1x Authentication", ref: "3196-3296"}]
+
+- id: AOS8-DOT1X-MACHINEAUTH-001
+  title: Machine authentication enabled where required
+  category: wlan
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "machine_auth_required == true"
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "machine-authentication"}
+        then: pass
+      - else: fail
+  remediation_hint: "Enable machine authentication in the 802.1X profile; set machine-auth default machine/user roles."
+  references: [{guide_section: "Configuring User and Machine Authentication", ref: "3271-3355"}]
+
+- id: AOS8-AP-GROUP-001
+  title: APs assigned to purpose-built groups (not all in 'default')
+  category: ap
+  severity: medium
+  applicability:
+    requires_evidence: [ap_database]
+  evidence:
+    - {key: ap_database, command: show ap database}
+    - {key: ap_group, command: show ap-group}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: aps_total}
+        then: manual
+      - when: {source: fact, predicate: fact_equals, arg: {path: aps_in_default, value: 0}}
+        then: pass
+      - else: warn
+  remediation_hint: "Create AP groups and reassign APs out of 'default' (AP reboot required)."
+  references: [{guide_section: "AP Names and Groups", ref: "3377-3463"}]
+
+- id: AOS8-AP-VAP-001
+  title: Virtual-AP profiles intentionally mapped to AP groups
+  category: ap
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ap_group, command: show ap-group}
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+  remediation_hint: "Review per-AP-group VAP lists; exclude unwanted SSIDs from exposed APs. (Topology/intent — manual.)"
+  references: [{guide_section: "Virtual AP Profiles", ref: "3468-3521"}]

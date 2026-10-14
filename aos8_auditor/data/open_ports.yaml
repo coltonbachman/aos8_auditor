@@ -1,0 +1,1059 @@
+# ArubaOS 8 open-port and control-plane reference.
+#
+# Transcribed from the ArubaOS 8 Controller Hardening Guide (revision 10,
+# January 2023): "Controller Open Ports" (p.9-14), "Access Point Open Ports"
+# (p.14) and "Aruba Core Protocols & Ports" (p.30-53).
+#
+# `purpose`/`description` and `notes` are the guide's own wording, kept verbatim
+# (including its quirks -- e.g. it prints SIP as "7 (TCP)" and ICMP as ports
+# 768-65535) so an operator can check this file against the PDF. `guidance` is
+# the ONLY derived field: a normalisation of the notes into
+#
+#   do_not_block     the guide says blocking breaks the product
+#   restrict         permitted, but limit the source to trusted hosts/subnets
+#   block_if_unused  blockable when the named feature is not in use
+#   safe_to_block    blockable with no loss of service
+#   see_notes        the guidance is conditional; read `notes`
+#
+# `in_use_fact` names the audit fact that decides whether the service behind the
+# port is actually in use on THIS controller, so the report can say "not needed
+# here" instead of listing all 43 ports flatly. Ports with no `in_use_fact` are
+# reported as unknown -- deliberately, because guessing would be worse than
+# silence.
+#
+# A fact belongs here ONLY if it describes the LISTENER on this port. Several
+# rows are the controller acting as a server for its own APs (UDP/123 NTP,
+# UDP/514 syslog); the facts the audit can see for those protocols describe the
+# controller as a CLIENT of upstream servers -- the opposite direction, and
+# anti-correlated, so a box with no external collector would be told its syslog
+# port is closeable while its APs are still logging to it. Those rows carry no
+# fact and stay unknown.
+#
+# This file is REFERENCE DATA, not controls: nothing here is scored. Port state
+# is not probed -- the auditor never scans. Two controls (ports_2023.yaml) act on
+# the subset the guide gives an explicit configuration remedy for.
+
+controller_ports:
+- port: '17'
+  transport: tcp
+  purpose: Used to support Nortel Contivity VPN clients
+  guidance: safe_to_block
+  notes: Can safely be blocked for most users. Vulnerability scanners report this as “quote of the day”
+    and may flag an alert for “quote of the day traffic amplification”.
+- port: '21'
+  transport: tcp
+  purpose: FTP. Used by Aruba APs to perform software image downloads from the controller.
+  guidance: block_if_unused
+  notes: FTP server supports download-only of AP image files. For this reason, security of this port is
+    not a high priority (i.e., unsecure authentication methods may be used). If FTP is blocked or inaccessible,
+    the APs will fall back to TFTP for image file downloads. Most APs prior to the AP-225 shipped from
+    the factory without an ArubaOS software image. FTP is required for these APs to boot the first time.
+    APs which are configured for CPsec will perform software image downloads inside an IPsec tunnel; these
+    APs do not require access to this port. Once a network is operating entirely in CPsec mode, this port
+    may be safely blocked.
+- port: '22'
+  transport: tcp
+  purpose: SSH. Used for administrative access to the ArubaOS command line.
+  guidance: restrict
+  notes: It is recommended to enable access to this port only from trusted subnets.
+- port: '23'
+  transport: tcp
+  purpose: Telnet. Used for administrative access to the ArubaOS command line.
+  guidance: block_if_unused
+  notes: Port is open by default, but connection attempts will be immediately closed. Telnet can be enabled
+    through the configuration command “telnet cli”. Aruba does not recommend enabling telnet. This port
+    may be blocked by firewall rules if telnet is not needed. This port is not open, and cannot be enabled,
+    in the FIPS version of ArubaOS.
+  in_use_fact: telnet_cli_enabled
+- port: '53'
+  transport: udp
+  purpose: DNS responder. This service responds to all DNS queries with the IP address of the mobility
+    controller. Often used to help APs boot when attached to isolated networks without an operating DNS
+    server.
+  guidance: safe_to_block
+  notes: May be blocked by firewall rules without any loss in service. Recommend using “no ip domain lookup”
+    (controller restart required) Vulnerability scanners often report problems with this port, such as
+    “DNS cache snooping”. Because this port does not connect to an actual DNS server, warnings may be
+    safely ignored.
+  in_use_fact: dns_responder_enabled
+- port: '67'
+  transport: udp
+  purpose: DHCP server. ArubaOS can provide DHCP server functionality when configured to do so.
+  guidance: see_notes
+  notes: Will be disabled automatically if DHCP service is not enabled.
+- port: '80'
+  transport: tcp
+  purpose: HTTP. Accepts connections for both Captive Portal and for WebUI administrative management.
+    Redirects to other ports using HTTPS.
+  guidance: block_if_unused
+  notes: May be blocked if not needed.
+- port: '123'
+  transport: udp
+  purpose: NTP. Provides time synchronization service to APs.
+  guidance: block_if_unused
+  notes: APs configured for CPsec will run NTP inside an IPsec tunnel; these APs do not require access
+    to this port. Once a network is operating entirely in CPsec mode, this port may be safely blocked.
+  # No in_use_fact on purpose: this is the controller acting as an NTP SERVER for
+  # its APs. The audit can see the controller's own upstream NTP servers, which is
+  # the opposite direction and would give exactly the wrong answer.
+- port: '161'
+  transport: udp
+  purpose: SNMP. Provides SNMP management access.
+  guidance: restrict
+  notes: Disabled by default – enabled when a SNMP community is configured. Access to this port should
+    be restricted to authorized SNMP management systems, such as AirWave. Aruba recommends the use of
+    SNMPv3.
+  in_use_fact: snmp_configured
+- port: '389'
+  transport: tcp
+  purpose: LDAP
+  guidance: safe_to_block
+  notes: Port may be safely blocked.
+- port: '443'
+  transport: tcp
+  purpose: HTTPS. Used for captive portal authentication, WebUI administrative management, and VIA.
+  guidance: see_notes
+  notes: WebUI will redirect to TCP/4343 unless “webserver web-https-port-443” has been configured. Captive
+    portal will redirect to TCP/8081. VIA clients require this port to be available to perform profile
+    download, and for SSL fallback mode.
+- port: '500'
+  transport: udp
+  purpose: ISAKMP/IKE. Used by IPsec.
+  guidance: block_if_unused
+  notes: May be blocked if the controller is not being used as a VPN server. VIA, RAPs, and APs operating
+    in CPsec mode will use UDP/4500 by default to establish their IPsec tunnels.
+- port: '514'
+  transport: udp
+  purpose: Syslog. The controller operates as a syslog receiver for log messages from APs.
+  guidance: block_if_unused
+  notes: APs operating in CPsec mode will use the syslog protocol inside an IPsec tunnel; these APs do
+    not require access to this port. This port may be blocked if not needed.
+  # No in_use_fact on purpose: this is the controller acting as a syslog RECEIVER
+  # for its APs. The audit can see the collectors the controller SENDS to, which is
+  # the opposite direction -- a box with no external collector would be marked
+  # "not needed here" while its APs are still logging to it.
+- port: '636'
+  transport: tcp
+  purpose: LDAPS
+  guidance: safe_to_block
+  notes: Port may be safely blocked.
+- port: '647'
+  transport: tcp
+  purpose: Used for DHCP Failover protocol.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if the controller is not configured for DHCP failover.
+- port: '1701'
+  transport: udp
+  purpose: L2TP. Used for VPN termination.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if the controller is not being used as a VPN server for L2TP.
+- port: '1718'
+  transport: udp
+  purpose: Used for gatekeeper discovery using gatekeeper request on multicast group address 224.0.1.41.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if H.323 device is not being used.
+- port: '1719'
+  transport: udp
+  purpose: Signaling protocol used between H.323 gateways and gatekeepers.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if H.323 device is not being used.
+- port: '1720'
+  transport: tcp
+  purpose: Port used for call control signaling to setup connections between H.323 endpoints.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if H.323 device is not being used.
+- port: '1723'
+  transport: tcp
+  purpose: PPTP. Used for VPN termination.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if the controller is not being used as a VPN server for PPTP.
+- port: '2000'
+  transport: tcp
+  purpose: Used by SCCP client phone to communicate with Cisco Unified Communications Manager (CUCM) server.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if Cisco Unified Communications Manager (CUCM) is not being used.
+- port: '2126'
+  transport: tcp
+  purpose: Port used if an AP fails to download the image from the standard FTP server. It will then try
+    to download the image from the control plane FTP server. This is only applicable on 9xxx series controllers.
+  guidance: do_not_block
+  notes: This port should not be blocked.
+- port: '32512'
+  transport: udp
+  purpose: Used by New Office Environment (NOE) for voice communication (RTP traffic).
+  guidance: block_if_unused
+  notes: Port may be safely blocked if New Office Environment (NOE) is not being used.
+- port: '4343'
+  transport: tcp
+  purpose: HTTPS. Used for WebUI administrative management.
+  guidance: see_notes
+  notes: Connections to TCP/443 will redirect to this port by default, unless WebUI access through TCP/443
+    has been enabled.
+- port: '4500'
+  transport: udp
+  purpose: ISAKMP/IKE NAT Traversal. Used by VIA client, RAPs, and APs operating in CPsec mode.
+  guidance: do_not_block
+  notes: This port should not be blocked.
+  in_use_fact: cpsec_enabled
+- port: '5000'
+  transport: udp
+  purpose: Used by IP phones for signaling purpose on NOE.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if New Office Environment (NOE) is not being used.
+- port: '5002'
+  transport: udp
+  purpose: Port used by Vocera phones to provide signaling to a Vocera VoIP server.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if Vocera VoIP server is not being used.
+- port: '6008'
+  transport: tcp
+  purpose: Legacy port used by Airwave for AMON data. This port will be closed in future AOS versions.
+  guidance: safe_to_block
+  notes: Port may be safely blocked.
+- port: '6633'
+  transport: tcp
+  purpose: OpenFlow. Used for TLS connections between OpenFlow controllers and OpenFlow agents.
+  guidance: block_if_unused
+  notes: If this port is blocked, AirGroup and UCC will not function.
+- port: '7779'
+  transport: tcp
+  purpose: Port is used by nbapi-helper as the ZeroMQ endpoint. Subscriber applications need access to
+    ZeroMQ libraries to connect to ALE.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if ALE is not being used.
+- port: '8080'
+  transport: tcp
+  purpose: HTTP. Used for captive portal.
+  guidance: block_if_unused
+  notes: May be blocked if captive portal is not in use.
+  in_use_fact: captive_portal_in_use
+- port: '8081'
+  transport: tcp
+  purpose: HTTPS. Used for captive portal.
+  guidance: block_if_unused
+  notes: May be blocked if captive portal is not in use.
+  in_use_fact: captive_portal_in_use
+- port: '8082'
+  transport: tcp
+  purpose: Used for single sign-on with other Aruba infrastructure
+  guidance: block_if_unused
+  notes: May be blocked if single sign-on and captive portal is not in use.
+  in_use_fact: captive_portal_in_use
+- port: '8083'
+  transport: tcp
+  purpose: Used for internal Single Sign-On authentication.
+  guidance: block_if_unused
+  notes: May be blocked if single sign-on and captive portal is not in use.
+  in_use_fact: captive_portal_in_use
+- port: '8085'
+  transport: tcp
+  purpose: Enabled by configuration. Used for VIA to perform profile download when certificate-based VIA
+    authentication is enabled.
+  guidance: block_if_unused
+  notes: May be blocked if not needed.
+- port: '8088'
+  transport: tcp
+  purpose: HTTP/HTTPS. Used for captive portal for proxied clients.
+  guidance: block_if_unused
+  notes: May be blocked if captive portal is not in use with clients that require a web proxy.
+  in_use_fact: captive_portal_in_use
+- port: 9070-9080
+  transport: null
+  purpose: Ports 9070 to 9080 are opened by OpenFlow Controller to be used by registered apps.
+  guidance: block_if_unused
+  notes: If these ports are blocked, AirGroup and UCC will not function.
+- port: '9090'
+  transport: tcp
+  purpose: This port is used to access the nbapi-helper APIs.
+  guidance: block_if_unused
+  notes: Port may be safely blocked if ALE is not being used.
+- port: '9199'
+  transport: tcp
+  purpose: Data replication between MDs, and between MD and MCR.
+  guidance: do_not_block
+  notes: 'This port should not be blocked if Mobility Conductor is in use. Note: Need for this port being
+    open is under review. Normally this traffic flows inside an IPSec tunnel.'
+- port: '32000'
+  transport: tcp
+  purpose: Used for integration with Microsoft Lync/Skype for Business
+  guidance: block_if_unused
+  notes: May be blocked if Lync/Skype for Business integration is not being done.
+- port: '15260'
+  transport: tcp
+  purpose: MCR connects to MD on this port for additional data collection that is not available through
+    other messaging protocols. This port is used for IPv4
+  guidance: do_not_block
+  notes: Do not block this port if Mobility Conductor is in use. Normally this traffic flows inside an
+    IPSec tunnel.
+- port: '15267'
+  transport: tcp
+  purpose: This port is used by the MDs to receive AMON messages from APs.
+  guidance: do_not_block
+  notes: Do not block this port.
+- port: '15720'
+  transport: tcp
+  purpose: MCR connects to MD on this port for additional data collection that is not available through
+    other messaging protocols. This port is used for IPv6
+  guidance: do_not_block
+  notes: Do not block this port if Mobility Conductor is in use. Normally this traffic flows inside an
+    IPSec tunnel.
+access_point_ports:
+- port: '67'
+  transport: udp
+  purpose: Used by AP to serve DHCP to clients.
+  guidance: block_if_unused
+  notes: May be blocked if not needed.
+- port: '8209'
+  transport: udp
+  purpose: Used by the AP to send PAPI messages when CPSec is enabled.
+  guidance: do_not_block
+  notes: Do not block this port.
+  in_use_fact: cpsec_enabled
+- port: '8080'
+  transport: tcp
+  purpose: To serve a Captive Portal page. Request on this port is redirected to external or internal
+    captive portal page for authentication.
+  guidance: block_if_unused
+  notes: May be blocked if not needed.
+  in_use_fact: captive_portal_in_use
+- port: '8081'
+  transport: tcp
+  purpose: To serve a Captive Portal page. Request on this port is redirected to external or internal
+    captive portal page for authentication.
+  guidance: block_if_unused
+  notes: May be blocked if not needed.
+  in_use_fact: captive_portal_in_use
+control_plane_protocols:
+- name: Remote Sync (RSYNC)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 873
+  - 873
+  flows: MCR <> MD | MCR <> MCR
+  description: Used to download files from MCR to MDs and between MCR’s configured for layer 3 redundancy.
+  notes: This rule should not be modified.
+  guidance: see_notes
+  default_rules:
+  - ipv4 permit any proto 6 ports 873 873
+  example_rules: []
+- name: Instant AP VPN (IAP-VPN)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 8089
+  - 8089
+  flows: MD <> AP
+  description: Used by MDs to communicate with Instant teleworker APs.
+  notes: This rule should not be modified and is restrictive by default.
+  guidance: see_notes
+  default_rules:
+  - ipv4 permit any proto 6 ports 8089 8089
+  - ipv6 permit any proto 6 ports 8089 8089
+  example_rules: []
+- name: Configuration Manager
+  transport: TCP
+  protocol: 6
+  ports:
+  - 8211
+  - 8211
+  flows: MCR <> MD
+  description: Used by the configuration manager on the MCR to accept connections from MDs.
+  notes: This rule should not be modified.
+  guidance: see_notes
+  default_rules:
+  - Ipv4 permit any proto 6 ports 8211 8211
+  example_rules: []
+- name: Configuration Synchronization
+  transport: TCP
+  protocol: 6
+  ports:
+  - 8212
+  - 8212
+  flows: MCR <> MD
+  description: Used by the configuration manager on the MCR for heartbeats and configuration synchronization
+    to MDs.
+  notes: This rule should not be modified and is restrictive by default.
+  guidance: see_notes
+  default_rules:
+  - ipv6 permit any proto 6 ports 8212 8212
+  example_rules: []
+- name: Replication
+  transport: TCP
+  protocol: 6
+  ports:
+  - 9091
+  - 9091
+  flows: MCR <> MD | MD <> MD
+  description: Used to replicate data between MCR and MDs and between MDs.
+  notes: This protocol and port should not be blocked but maybe restricted to specific host IP addresses
+    or CIDRs (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 9091 9091
+  example_rules:
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 6 ports 9091 9091 <- MCR CIDR
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 6 ports 9091 9091 <- MD CIDR
+  - ipv4 deny any proto 6 ports 9091 9091
+- name: Data Replication
+  transport: TCP
+  protocol: 6
+  ports:
+  - 9199
+  - 9199
+  flows: MCR <> MD | MD <> MD
+  description: Used to replicate data between MCR to MDs and MD to MD.
+  notes: This protocol and port should not be blocked but maybe restricted to specific host IP addresses
+    or CIDRs (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 9199 9199
+  example_rules:
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 6 ports 9199 9199 <- MCR CIDR
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 6 ports 9199 9199 <- MD CIDR
+  - ipv4 deny any proto 6 ports 9199 9199
+- name: Monitoring Bootstrap Messages
+  transport: TCP
+  protocol: 6
+  ports:
+  - 15260
+  - 15260
+  flows: MCR <> MD
+  description: Used for monitoring bootstrap messages exchanged from MCR to MDs.
+  notes: This protocol and port should not be blocked but maybe restricted to specific host IP addresses
+    or CIDRs (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 15260 15260
+  example_rules:
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 6 ports 15260 15260 <- MCR CIDR
+  - ipv4 deny any proto 6 ports 15260 15260
+- name: AMON Receiver
+  transport: TCP
+  protocol: 6
+  ports:
+  - 15267
+  - 15267
+  flows: MD <> AP
+  description: Used by the MDs to receive AMON messages from APs.
+  notes: This protocol and port should not be blocked but maybe restricted to specific AP CIDRs (see below
+    example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 15267 15267
+  example_rules:
+  - ipv4 permit 192.168.70.0 255.255.255.0 proto 6 ports 15267 15267 <- AP CIDR 1
+  - ipv4 permit 192.168.71.0 255.255.255.0 proto 6 ports 15267 15267 <- AP CIDR 2
+  - ipv4 deny any proto 6 ports 15267 15267
+- name: Mobile IP
+  transport: TCP
+  protocol: 17
+  ports:
+  - 434
+  - 434
+  flows: MD <> MD
+  description: Used to provide layer 3 mobility between MDs. Note that Mobile IP is not commonly implemented
+    in ArubaOS 8 cluster deployments.
+  notes: This protocol and port maybe blocked if Mobile IP is not enabled.
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 434 434 bandwidth-contract cpbwc-ipv4-mobility
+  example_rules:
+  - ipv4 deny any proto 17 ports 434 434 bandwidth-contract cpbwc-ipv4-mobility
+- name: Internet Security Association and Key Management Protocol (ISAKMP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 500
+  - 500
+  flows: MD <> MD
+  description: Used to establish security associations for MCR to MDs, MD to MD and APs and MDs. ISAKMP
+    is also used for legacy VPN tunnels.
+  notes: This protocol and port must be permitted between MDs but can be blocked to APs if CPsec is enabled
+    (see below example). ISAKMP will need to be permitted if CPsec is disabled or if legacy VPN clients
+    / tunnels need to be terminated by the MDs.
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 500 500 bandwidth-contract cpbwc-ipv4-ike
+  example_rules:
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 17 ports 500 500 bandwidth-contract cpbwc-ipv4-ike <-
+    MD CIDR
+  - ipv4 deny any proto 17 ports 500 500 bandwidth-contract cpbwc-ipv4-ike
+- name: NAT-T
+  transport: UDP
+  protocol: 17
+  ports:
+  - 4500
+  - 4500
+  flows: MCR <> MD | MD <> MD | AP <> MD
+  description: Used to secure control-plane traffic for MCR to MDs, MD to MD and APs to MDs. NAT-T is
+    also used to establish secure overlays for SD-Branch, remote AP and VIA applications.
+  notes: This protocol and port should not be blocked but maybe restricted to specific host IP addresses
+    or CIDRs (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 4500 4500
+  example_rules:
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 17 ports 4500 4500 <- MCR CIDR
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 17 ports 4500 4500 <- MD CIDR
+  - ipv4 permit 192.168.70.0 255.255.255.0 proto 17 ports 4500 4500 <- AP CIDR 1
+  - ipv4 permit 192.168.71.0 255.255.255.0 proto 17 ports 4500 4500 <- AP CIDR 2
+  - ipv4 deny any proto 17 ports 4500 4500
+- name: Aruba Discovery Protocol (ADP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 8200
+  - 8200
+  flows: AP <> MD
+  description: Used by APs to discover MDs using IP multicast.
+  notes: This protocol and port can be blocked if ADP discovery is not implemented.
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 8200 8200 bandwidth-contract cpbwc-ipv4-others
+  example_rules:
+  - ipv4 deny any proto 17 ports 8200 8200 bandwidth-contract cpbwc-ipv4-others
+- name: Secure PAPI
+  transport: UDP
+  protocol: 17
+  ports:
+  - 8209
+  - 8209
+  flows: AP <> MD
+  description: Aruba management control protocol exchanged from APs to MDs when CPsec is enabled.
+  notes: This protocol and port should not be blocked but maybe restricted to specific AP CIDRs (see below
+    example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 8209 8209
+  example_rules:
+  - ipv4 permit 192.168.70.0 255.255.255.0 proto 17 ports 8209 8209 <- AP CIDR 1
+  - ipv4 permit 192.168.71.0 255.255.255.0 proto 17 ports 8209 8209 <- AP CIDR 2
+  - ipv4 deny any proto 17 ports 8209 8209
+- name: PAPI
+  transport: UDP
+  protocol: 17
+  ports:
+  - 8211
+  - 8211
+  flows: MCR <> MD | MD <> MD | AP <> MD | Switch <> MD
+  description: Used to secure control-plane traffic for MCR to MDs, MD to MD and APs to MDs. PAPI is also
+    used for Aruba Switches to MDs for UBT.
+  notes: This protocol and port should not be blocked but maybe restricted to specific host IP addresses
+    or CIDRs (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 8211 8211
+  example_rules:
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 17 ports 8211 8211 <- MCR CIDR
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 17 ports 8211 8211 <- MD CIDR
+  - ipv4 permit 192.168.70.0 255.255.255.0 proto 17 ports 8211 8211 <- AP CIDR 1 (New AP Provisioning)
+  - ipv4 permit 192.168.71.0 255.255.255.0 proto 17 ports 8211 8211 <- AP CIDR 2 (New AP Provisioning)
+  - ipv4 deny any proto 17 ports 8211 8211
+- name: Generic Routing Encapsulation (GRE)
+  transport: UDP
+  protocol: 47
+  ports:
+  - 0
+  - 65535
+  flows: AP <> MD | Switch <> MD | MD <> MD
+  description: Used to encapsulate data from APs to MDs , MDs to MDs and Aruba Switches to MDs.
+  notes: This protocol and port should not be blocked but maybe restricted to specific AP / switch CIDRs
+    (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 47 ports 0 65535
+  example_rules:
+  - ipv4 permit 192.168.8.0 255.255.255.0 proto 47 ports 0 65535 <- Switch CIDR
+  - ipv4 permit 192.168.70.0 255.255.255.0 proto 47 ports 0 65535 <- AP CIDR 1
+  - ipv4 permit 192.168.71.0 255.255.255.0 proto 47 ports 0 65535 <- AP CIDR 2
+  - ipv4 deny any proto 47 ports 0 65535
+- name: Encapsulating Security Payload (ESP)
+  transport: UDP
+  protocol: 50
+  ports:
+  - 0
+  - 65535
+  flows: MD <> MD
+  description: Used to secure data between MDs. ESP is also used for legacy VPN tunnels.
+  notes: This protocol and port must be permitted between MDs but can be blocked to APs if CPsec is enabled
+    (see below example). ESP will need to be permitted if CPsec is disabled or if legacy VPN clients /
+    tunnels need to be terminated by the MDs.
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 50 ports 0 65535
+  example_rules:
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 50 ports 0 65535 <- MD CIDR
+  - ipv4 deny any proto 50 ports 0 65535
+- name: File Transfer Protocol (FTP)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 21
+  - 21
+  flows: MD <> AP
+  description: Used to upgrade AP firmware from MDs.
+  notes: This protocol and port should not be blocked but maybe restricted to specific AP CIDRs (see below
+    example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 21 21 bandwidth-contract cpbwc-ipv6-file-transfer
+  example_rules:
+  - ipv4 permit 192.168.70.0 255.255.255.0 proto 6 ports 21 21 bandwidth-contract cpbwc-ipv6-file-transfer
+    <- AP CIDR 1
+  - ipv4 permit 192.168.71.0 255.255.255.0 proto 6 ports 21 21 bandwidth-contract cpbwc-ipv6-file-transfer
+    <- AP CIDR 2
+  - ipv4 deny any proto 6 ports 21 21 bandwidth-contract cpbwc-ipv6-file-transfer
+- name: Secure Shell (SSH)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 22
+  - 22
+  flows: MCR to MD | Admin <> MD
+  description: 'Used for multiple applications on MDs including: 1. Remote access to MDs console over
+    the LAN. 2. Remote login to MDs from the MCR (mdconnect). 3. MD firmware upgrades (secure copy protocol).'
+  notes: This protocol and port should not be blocked but maybe restricted to specific host IP addresses
+    or CIDRs (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 22 22 bandwidth-contract cpbwc-ipv4-file-transfer
+  example_rules:
+  - ipv4 permit 192.168.18.0 255.255.255.0 proto 6 ports 22 22 bandwidth-contract cpbwc-ipv4-file-transfer
+    <- ADMIN CIDR
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 6 ports 22 22 bandwidth-contract cpbwc-ipv4-file-transfer
+    <- MCR CIDR
+  - ipv4 deny any proto 6 ports 22 22 bandwidth-contract cpbwc-ipv4-file-transfer
+- name: Telnet
+  transport: TCP
+  protocol: 6
+  ports:
+  - 23
+  - 23
+  flows: Admin <> MD
+  description: Legacy protocol used to provide remote access to the MDs console over the LAN.
+  notes: This protocol and port are blocked by default. No additional action is required.
+  guidance: see_notes
+  default_rules:
+  - ipv4 deny any proto 6 ports 23 23 bandwidth-contract cpbwc-ipv4-telnet
+  example_rules: []
+- name: Hyper Text Transfer Protocol (HTTP)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 80
+  - 80
+  flows: Admin <> MD
+  description: Used to manage the MD via Web-UI over the LAN. Note, HTTP is a depreciated protocol that
+    has been replaced with HTTPS.
+  notes: This protocol and port maybe optionally restricted.
+  guidance: restrict
+  default_rules:
+  - ipv4 permit any proto 6 ports 80 80 bandwidth-contract cpbwc-ipv4-http
+  example_rules:
+  - ipv4 deny any proto 6 ports 80 80 bandwidth-contract cpbwc-ipv4-http
+- name: Hyper Text Transfer Protocol Secure (HTTPS)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 443
+  - 443
+  flows: Admin <> MD
+  description: 'Used for multiple applications on MDs including: 1. Web-UI management redirection to port
+    4343. 2. Authentication, authorization, and cert-based authentication for VIA clients. 3. Northbound
+    APIs. Note, recommend using default rules for 443 if MDs are terminating VIA clients.'
+  notes: This protocol and ports maybe optionally restricted if no Web-UI management of the MDs is required.
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 443 443 bandwidth-contract cpbwc-ipv4-http
+  - ipv4 permit any proto 6 ports 4343 4343 bandwidth-contract cpbwc-ipv4-http
+  example_rules:
+  - ipv4 deny any proto 6 ports 443 443 bandwidth-contract cpbwc-ipv4-http
+  - ipv4 deny any proto 6 ports 4343 4343 bandwidth-contract cpbwc-ipv4-http
+- name: Support Mode (TAC)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 2300
+  - 2300
+  flows: TAC <> MD
+  description: Used by TAC to access the shell on a MDs via telnet or SSH for advanced troubleshooting
+    and debugging.
+  notes: This protocol and port maybe optionally restricted and can be opened as needed when directed
+    by TAC.
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 2300 2300 bandwidth-contract cpbwc-ipv4-telnet
+  - ipv4 permit any proto 6 ports 2323 2323 bandwidth-contract cpbwc-ipv4-telnet
+  example_rules:
+  - ipv4 deny any proto 6 ports 2300 2300 bandwidth-contract cpbwc-ipv4-telnet
+  - ipv4 deny any proto 6 ports 2323 2323 bandwidth-contract cpbwc-ipv4-telnet
+- name: Trivial File Transfer Protocol (TFTP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 69
+  - 69
+  flows: AP <> MD
+  description: Legacy protocol used by MDs to upgrade AP firmware if FTP fails.
+  notes: This protocol and port maybe optionally blocked.
+  guidance: safe_to_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 69 69 bandwidth-contract cpbwc-ipv4-file-transfer
+  example_rules:
+  - ipv4 deny any proto 17 ports 69 69 bandwidth-contract cpbwc-ipv4-file-transfer
+- name: Simple Network Management Protocol (SNMP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 161
+  - 161
+  flows: SNMP Manager <> MD
+  description: Used to monitor MDs from a SNMP management application such as Aruba Airwave.
+  notes: This protocol and port maybe optionally blocked if SNMP is not implemented. If SNMP is implemented,
+    access should be restricted to specific SNMP management server host IP addresses or CIDRs (see below
+    example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 161 161 bandwidth-contract cpbwc-ipv4-snmp
+  example_rules:
+  - ipv4 permit 192.168.10.0 255.255.255.0 proto 17 ports 161 161 bandwidth-contract cpbwc-ipv4-snmp <-
+    SNMP Mgr CIDR
+  - ipv4 deny any proto 17 ports 161 161 bandwidth-contract cpbwc-ipv4-snmp
+- name: Syslog
+  transport: UDP
+  protocol: 17
+  ports:
+  - 514
+  - 514
+  flows: AP <> MD
+  description: Used by APs to send syslog messages to MDs.
+  notes: This protocol and port can be optionally blocked when APs are using CPsec.
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 514 514 bandwidth-contract cpbwc-ipv4-syslog
+  example_rules:
+  - ipv4 deny any proto 17 ports 514 514 bandwidth-contract cpbwc-ipv4-syslog
+- name: Internet Control Message Protocol (ICMP)
+  transport: UDP
+  protocol: 1
+  ports:
+  - 768
+  - 65535
+  flows: MCR <> MD | MD <> MD | AP <> MD
+  description: Used to verify reachability between managed devices and path reachability for SD-Branch
+    applications.
+  notes: This protocol should not be restricted between managed devices to aid in troubleshooting, but
+    maybe restricted to specific CIDRs and hosts (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 1 ports 768 65535 bandwidth-contract cpbwc-ipv4-icmp
+  example_rules:
+  - ipv4 permit 192.168.18.0 255.255.255.0 proto 1 ports 768 65535 bandwidth-contract cpbwc-ipv4-icmp
+    <- ADMIN CIDR
+  - ipv4 permit 192.168.66.0 255.255.255.0 proto 1 ports 768 65535 bandwidth-contract cpbwc-ipv4-icmp
+    <- MCR CIDR
+  - ipv4 permit 192.168.76.0 255.255.255.0 proto 1 ports 768 65535 bandwidth-contract cpbwc-ipv4-icmp
+    <- MD CIDR
+  - ipv4 deny any proto 1 ports 768 65535 bandwidth-contract cpbwc-ipv4-icmp
+- name: Internet Group Management Protocol (IGMP)
+  transport: UDP
+  protocol: 2
+  ports:
+  - 0
+  - 65535
+  flows: MD <> PIM Router
+  description: Used if PIM Proxy is enabled on the MDs to exchange group membership reports to upstream
+    PIM routers.
+  notes: IGMP is a critical network protocol and should not be restricted or blocked.
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 2 ports 0 65535
+  example_rules: []
+- name: Open Shortest Path First (OSPF)
+  transport: UDP
+  protocol: 89
+  ports:
+  - 0
+  - 65535
+  flows: MD to MD | MD to OSPF Router
+  description: Used to exchange routes between MDs and upstream OSPF routers.
+  notes: OSPF is a critical network protocol and should not be restricted or blocked.
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 89 ports 0 65535
+  example_rules: []
+- name: Virtual Router Redundancy Protocol (VRRP)
+  transport: UDP
+  protocol: 112
+  ports:
+  - 0
+  - 65535
+  flows: MD to MD
+  description: Standards based protocol used to provide first-hop router redundancy for branch applications
+    and RADIUS CoA for campus applications. Recommend leave default unless VRRP is not implemented.
+  notes: VRRP is a critical network protocol and should not be restricted or blocked.
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 112 ports 0 65535
+  example_rules: []
+- name: Lightweight Directory Access Service (LDAP)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 389
+  - 389
+  flows: MD <> LDAP Server
+  description: Legacy protocol used by MD for LDAP authentication. Note that port 389 is used for native
+    LDAP while port 636 is used for LDAP over SSL.
+  notes: This protocol and ports maybe optionally blocked if LDAP integration with an external user directory
+    is not implemented (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 389 389 bandwidth-contract cpbwc-ipv4-radius-ldap
+  - ipv4 permit any proto 6 ports 636 636 bandwidth-contract cpbwc-ipv4-radius-ldap
+  example_rules:
+  - ipv4 deny any proto 6 ports 389 389 bandwidth-contract cpbwc-ipv4-radius-ldap
+- name: Session Initiation Protocol (SIP)
+  transport: TCP
+  protocol: 7
+  ports:
+  - 5080
+  - 5080
+  flows: N/A
+  description: Used by unified communication and collaboration (UCC) to process SIP packets from clients.
+  notes: This protocol and ports maybe optionally blocked if UCC is not implemented (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 7 ports 5080 5080
+  example_rules:
+  - ipv4 deny any proto 6 ports 5080 5080
+- name: Tomcat Webserver Integration
+  transport: TCP
+  protocol: 6
+  ports:
+  - 6008
+  - 6008
+  flows: N/A
+  description: Legacy protocol used by MDs to provide integration with Tomcat webserver.
+  notes: This protocol and port maybe blocked (see below example).
+  guidance: safe_to_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 6008 6008
+  example_rules:
+  - ipv4 deny any proto 6 ports 6008 6008
+- name: Captive Portal (HTTP)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 8080
+  - 8080
+  flows: MD <> Client
+  description: Used by MDs to provide captive portal services to clients.
+  notes: This protocol and port maybe optionally blocked if captive portal is not implemented (see below
+    example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 8080 8083 bandwidth-contract cpbwc-ipv4-http
+  example_rules:
+  - ipv4 deny any proto 6 ports 8080 8083 bandwidth-contract cpbwc-ipv4-http
+- name: Captive Portal (Proxy)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 8088
+  - 8088
+  flows: MD <> Client
+  description: Used by MDs to provide captive portal services to clients.
+  notes: This protocol and port maybe optionally blocked if captive portal is not implemented (see below
+    example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 8088 8088 bandwidth-contract cpbwc-ipv4-http
+  - ipv4 permit any proto 6 ports 8888 8888 bandwidth-contract cpbwc-ipv4-http
+  example_rules:
+  - ipv4 deny any proto 6 ports 8088 8088 bandwidth-contract cpbwc-ipv4-http
+  - ipv4 deny any proto 6 ports 8888 8888 bandwidth-contract cpbwc-ipv4-http
+- name: Software Defined Networking (SDN)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 8090
+  - 8090
+  flows: 'Default Rules: ipv4 permit any proto 6 ports 8090 8090'
+  description: Used by MDs for SDN API.
+  notes: This protocol and port maybe optionally blocked if SDN is not in use (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 8090 8090
+  example_rules:
+  - ipv4 deny any proto 6 ports 8090 8090
+- name: Domain Name System (DNS)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 53
+  - 53
+  flows: Client <> MD
+  description: Used by MDs to respond to clients if DNS forwarding is enabled.
+  notes: This protocol and port maybe restricted to specific host IP addresses or CIDRs if DNS forwarding
+    is enabled (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 53 53 bandwidth-contract cpbwc-ipv4-dns
+  example_rules:
+  - ipv4 deny any proto 17 ports 53 53 bandwidth-contract cpbwc-ipv4-dns
+- name: Dynamic Host Configuration Protocol (DHCP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 67
+  - 68
+  flows: Client <> MD
+  description: Used if MDs are providing DHCP services to client or if DHCP relay is enabled on one or
+    more VLAN interfaces.
+  notes: This protocol and ports maybe restricted if the MDs are not providing DHCP services to clients
+    or no IP helper addresses are configured on VLAN interfaces (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 67 68 bandwidth-contract cpbwc-ipv4-dhcp
+  example_rules:
+  - ipv4 deny any proto 17 ports 67 68 bandwidth-contract cpbwc-ipv4-dhcp
+- name: Dynamic Host Configuration Protocol (DHCP) Failover
+  transport: UDP
+  protocol: 6
+  ports:
+  - 647
+  - 647
+  flows: MD <> MD
+  description: Used by SD-Branch gateways to provide redundant DHCP services to clients. Not applicable
+    for campus applications.
+  notes: This protocol and port must not be restricted between SD-Branch gateways if deployed as a HA
+    pairs but can be blocked for campus deployments (see below example).
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 647 647 bandwidth-contract cpbwc-ipv4-dhcp-sync
+  example_rules:
+  - ipv4 deny any proto 6 ports 647 647 bandwidth-contract cpbwc-ipv4-dhcp-sync
+- name: Network Time Protocol (NTP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 123
+  - 123
+  flows: AP <> MD
+  description: Used by APs to synchronize their time from their MD.
+  notes: This protocol and port maybe blocked if APs are using CPsec (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 123 123 bandwidth-contract cpbwc-ipv4-ntp
+  example_rules:
+  - ipv4 deny any proto 17 ports 123 123 bandwidth-contract cpbwc-ipv4-ntp
+- name: RADIUS AAA
+  transport: UDP
+  protocol: 17
+  ports:
+  - 1645
+  - 1645
+  flows: AAA <> MD
+  description: Used for outbound MD to AAA server communications.
+  notes: This protocol and ports maybe optionally restricted to authorized AAA servers but should not
+    be blocked (see below example). Legacy port 1645 maybe blocked if using modern RADIUS servers.
+  guidance: do_not_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 1645 1645 bandwidth-contract cpbwc-ipv4-radius-ldap
+  - ipv4 permit any proto 17 ports 1812 1813 bandwidth-contract cpbwc-ipv4-radius-ldap
+  example_rules:
+  - ipv4 deny any proto 17 ports 1645 1645 bandwidth-contract cpbwc-ipv4-radius-ldap
+  - ipv4 permit 192.168.10.0 255.255.255.0 proto 17 ports 1812 1813 bandwidth-contract cpbwc-ipv4-radius-ldap
+    <- AAA CIDR
+  - ipv4 deny any proto 17 ports 1812 1813 bandwidth-contract cpbwc-ipv4-radius-ldap
+- name: RADIUS CoA
+  transport: UDP
+  protocol: 17
+  ports:
+  - 3799
+  - 3799
+  flows: AAA <> MD
+  description: Used by AAA servers to send RADIUS CoA messages to MDs.
+  notes: This protocol and port are required from the AAA server(s) to the MDs if change of authorization
+    is implemented (see below example).
+  guidance: see_notes
+  default_rules:
+  - ipv4 permit any proto 17 ports 3799 3799 bandwidth-contract cpbwc-ipv4-radius-ldap
+  example_rules:
+  - ipv4 permit 192.168.10.0 255.255.255.0 proto 17 ports 3799 3799 bandwidth-contract cpbwc-ipv4-radius-ldap
+    <- AAA CIDR
+  - ipv4 deny any proto 17 ports 3799 3799 bandwidth-contract cpbwc-ipv4-radius-ldap
+- name: Session Initiation Protocol (SIP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 5060
+  - 5060
+  flows: N/A
+  description: Used by unified communication and collaboration (UCC) to process SIP packets from clients.
+  notes: This protocol and ports maybe optionally blocked if UCC is not implemented (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 5060 5060
+  example_rules:
+  - ipv4 deny any proto 17 ports 5060 5060
+- name: Nortel VPN Client
+  transport: TCP
+  protocol: 17
+  ports:
+  - 17
+  - 17
+  flows: Client <> MD
+  description: Legacy protocol used on MDs to display a banner on Nortel VPN clients.
+  notes: This protocol and port can be blocked (see below example).
+  guidance: safe_to_block
+  default_rules:
+  - ipv4 permit any proto 6 ports 17 17 bandwidth-contract cpbwc-ipv4-others
+  example_rules:
+  - ipv4 deny any proto 6 ports 17 17 bandwidth-contract cpbwc-ipv4-others
+- name: Point-to-Point Tunneling Protocol (PPTP)
+  transport: TCP
+  protocol: 6
+  ports:
+  - 1723
+  - 1723
+  flows: Client <> MD
+  description: Legacy VPN tunneling protocol that can be terminated on MDs.
+  notes: This protocol and port can be blocked if MDs are not being used to terminate PPTP VPN clients
+    (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 6 ports 1723 1723
+  example_rules:
+  - ipv4 deny any proto 6 ports 1723 1723
+- name: Layer 2 Tunneling Protocol (L2TP)
+  transport: UDP
+  protocol: 17
+  ports:
+  - 1701
+  - 1701
+  flows: Client <> MD
+  description: Legacy VPN tunneling protocol that can be terminated on MDs.
+  notes: This protocol and port can be blocked if MDs are not being used to terminate L2TP VPN clients
+    (see below example).
+  guidance: block_if_unused
+  default_rules:
+  - ipv4 permit any proto 17 ports 1701 1701
+  example_rules:
+  - ipv4 deny any proto 17 ports 1701 1701
+- name: 3rd Party VPN Integration
+  transport: UDP
+  protocol: 17
+  ports:
+  - 1702
+  - 1702
+  flows: Client <> MD
+  description: Used to provide VPN integration with 3rd parties.
+  notes: This protocol and port can blocked (see below example).
+  guidance: safe_to_block
+  default_rules:
+  - ipv4 permit any proto 17 ports 1702 1702
+  example_rules:
+  - ipv4 deny any proto 17 ports 1702 1702

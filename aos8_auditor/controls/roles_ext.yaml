@@ -1,0 +1,199 @@
+# Roles & firewall policy hardening (extended) controls.
+# Stateful-vs-ACL, orphaned/unapplied policies, policy type, role precedence /
+# derivation rules, netdestination membership, the udp 68-69 first deny rule,
+# and AAA initial/default roles.
+
+- id: AOS8-ROLE-STATEFUL-001
+  title: Traffic control uses stateful session firewall policies (not standard/extended ACLs)
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ip_access_list, command: show ip access-list brief}
+    - {key: rights, command: show rights}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # No user-facing access lists at all -> can't judge; manual review.
+      - when: {source: running_config, predicate: regex_absent, arg: "(?im)^\\s*ip\\s+access-list\\s+\\S+"}
+        then: manual
+      # Stateful session policies are present -> the recommended construct is in use.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ip\\s+access-list\\s+session\\s+\\S+"}
+        then: pass
+      # Only standard/extended/mac/eth/route ACLs exist (no session) -> not stateful.
+      - else: warn
+  remediation_hint: "Use 'ip access-list session <name>' (stateful, bi-directional, dynamic) for user/role traffic control instead of standard/extended ACLs."
+  references: [{guide_section: "Using Firewall Policies (stateful)", ref: "3805-3823"}]
+
+- id: AOS8-ROLE-ORPHAN-POLICY-001
+  title: Session firewall policies are applied (no orphaned/unreferenced policies)
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ip_access_list, command: show ip access-list brief}
+    - {key: rights, command: show rights}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Bind every defined 'ip access-list session' policy to a user-role ('access-list session <p>') or to a port ('ip access-group <p> session'); remove policies that are not referenced (orphaned policies have no effect)."
+  references: [{guide_section: "Firewall policy must be applied to a role", ref: "3824-3826"}]
+
+- id: AOS8-ROLE-DEFAULTROLE-001
+  title: Authenticated WLAN users receive a defined default role (dot1x-default-role)
+  category: roles-policy
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # No 802.1x AAA wiring present -> not an 802.1x deployment we can score here.
+      - when: {source: running_config, predicate: regex_absent, arg: "(?im)^\\s*authentication-dot1x\\s+\\S+"}
+        then: manual
+      # A non-default (not 'logon'/'guest'/'denyall') authenticated role is selected.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*dot1x-default-role\\s+(?!logon\\b|guest\\b|denyall\\b)\\S+"}
+        then: pass
+      # Default role missing or left as logon/guest/denyall for authenticated users.
+      - else: fail
+  remediation_hint: "aaa profile <p> ; dot1x-default-role <authenticated-role>  (assign successfully-authenticated users a least-privilege role, not logon/guest)."
+  references: [{guide_section: "Assign Default role / server-derived roles", ref: "3755-3756"}]
+
+- id: AOS8-ROLE-SRVDERIV-001
+  title: Server-derived role rules present where the auth server returns roles
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "require_external_only_auth == true"
+  evidence:
+    - {key: aaa_server_groups, command: show aaa server-group}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # Server-group derivation rules ('set role'/'set vlan' within a server-group)
+      # honor the role/VLAN attributes the RADIUS/LDAP server returns.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*set\\s+(role|vlan|aaa)\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "aaa server-group <grp> ; set role condition <attr> <op> <value> set-value <role>  (enable server-derived roles so the AAA server's role attribute is honored on full auth)."
+  references: [{guide_section: "Server-derived roles", ref: "3306-3355,3755-3756"}]
+
+- id: AOS8-ROLE-USERDERIV-001
+  title: User-derivation (initial/pre-auth) rules reviewed for correct precedence
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_derivation_user, command: show aaa derivation-rules user}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Audit 'aaa derivation-rules user' (executed BEFORE auth) so MAC/OUI/SSID rules assign only the intended pre-auth role; remember precedence is initial < user-derived < method-default < server-derived < Aruba-VSA."
+  references: [{guide_section: "User role assignment methods and precedence", ref: "3894-3917"}]
+
+- id: AOS8-ROLE-INITROLE-001
+  title: Initial (unauthenticated) role is restrictive, not a permit-all role
+  category: roles-policy
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: rights, command: show rights}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # initial-role left at/forced to a wide-open role for pre-auth clients.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*initial-role\\s+(allowall|authenticated|guest-logon-allow|permit-all)(?![-\\w])"}
+        then: fail
+      # An explicit, named initial-role is configured for the AAA profile.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*initial-role\\s+\\S+"}
+        then: pass
+      # Falls back to the built-in 'logon' role implicitly -> review.
+      - else: manual
+  remediation_hint: "aaa profile <p> ; initial-role logon  (or a custom captive-portal role that permits only DHCP/DNS/captive-portal, never allowall)."
+  references: [{guide_section: "Initial role / precedence (lowest)", ref: "3894-3917"}]
+
+- id: AOS8-ROLE-MACHINEROLES-001
+  title: Machine-auth default machine role and user role are both defined
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "machine_auth_required == true"
+  evidence:
+    - {key: aaa_dot1x, command: show aaa authentication dot1x}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: all_of
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*machine-authentication\\s+machine-default-role\\s+\\S+"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*machine-authentication\\s+user-default-role\\s+\\S+"}
+        then: pass
+      - else: fail
+  remediation_hint: "aaa authentication dot1x <prof> ; machine-authentication machine-default-role <role> ; machine-authentication user-default-role <role>  (define both per the enforced policy; the only-machine and only-user failure modes land in these constrained roles)."
+  references: [{guide_section: "Machine-auth default machine/user roles + matrix", ref: "3291-3355"}]
+
+- id: AOS8-ROLE-NETDEST-MEMBERSHIP-001
+  title: Netdestination aliases do not include an overly broad any/default-route member
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: netdestination, command: show netdestination}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # No netdestination groups defined at all -> nothing to score here.
+      - when: {source: running_config, predicate: regex_absent, arg: "(?im)^\\s*netdestination\\s+\\S+"}
+        then: manual
+      # A 0.0.0.0/0 member INSIDE a netdestination block (scoped via the config
+      # tree, so a 0/0 in an unrelated ACL/nexthop line is not mistaken for one).
+      - when: {source: fact, predicate: fact_true, arg: netdest_has_default_route}
+        then: fail
+      - else: pass
+  remediation_hint: "netdestination <alias> ; list only the intended 'host <ip>'/'network <ip> <mask>' members (no 0.0.0.0/0); reference these aliases from the admin/user policies."
+  references: [{guide_section: "Define net destinations (aliases)", ref: "3991-4007"}]
+
+- id: AOS8-ROLE-UDP6869-DENY-001
+  title: Admin access policy denies client DHCP/bootp (udp 68-69) before any permit
+  category: roles-policy
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ip_access_list, command: show ip access-list brief}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # No admin/session policy that touches mgmt ports -> can't judge ordering here.
+      - when: {source: running_config, predicate: regex_absent, arg: "(?im)\\b(4343|svc-ssh|svc-https)\\b"}
+        then: manual
+      # The recommended leading deny for udp 68-69 from the user alias is present.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*(?:user\\s+)?any\\s+udp\\s+68\\s+69\\s+deny\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "ip access-list session <admin-policy> ; user any udp 68 69 deny  (place this DHCP/bootp deny FIRST so it precedes the management permits)."
+  references: [{guide_section: "Deny client DHCP/bootp udp 68-69 first", ref: "4008-4009"}]
+
+- id: AOS8-ROLE-POLICYTYPE-001
+  title: Firewall policy type selection reviewed (session type for user/admin policies)
+  category: roles-policy
+  severity: informational
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ip_access_list, command: show ip access-list brief}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Confirm each policy uses the correct type (ethertype/extended/mac/route/session/standard); user and administrative access policies should be 'session' (stateful) per the guide examples."
+  references: [{guide_section: "Firewall policy type selection", ref: "3843-3851,3966-3967"}]

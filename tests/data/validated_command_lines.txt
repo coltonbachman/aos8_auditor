@@ -1,0 +1,240 @@
+# Every command line this tool can send to a controller, and what a real one
+# said about each. Regenerate with:
+#
+#     python3 tools/validate_catalog.py --host ... --report r.json
+#     python3 tools/validate_catalog.py --snapshot --from-report r.json
+#
+# This file is not documentation. tests/test_command_lines_pinned.py compares it
+# against what the catalog emits today and fails on any difference, so a new or
+# edited remediation line cannot reach an operator until someone has run it past
+# a controller's own grammar and updated this snapshot.
+#
+# Why it exists: 'ssh disable-ciphers hmac-sha1-96' was wrong in a way that did
+# not produce an error. hmac-sha1-96 is a MAC, 'disable-ciphers' takes only
+# aes-cbc/aes-ctr, and the bad argument dropped the parser into the exec-mode SSH
+# client, which asked for a password and then read the next line of the block as
+# one. Five more lines were wrong in quieter ways; four of them were rollbacks
+# written by prefixing 'no ' to a command whose negation takes no argument, so
+# they would only have failed at the moment they were needed.
+#
+# checked against: ArubaOS 8.13.3.0, MC-VA-US
+# method:          CLI '?' completion, walked token by token. Nothing executed.
+#                  A whole-line '?' does NOT report a bad argument -- the parser
+#                  answers the part it liked and ignores the rest.
+#
+# format: <status>\t<control-id>\t<apply|rollback>\t<command line>\t[<reason>]
+#
+#   ok      the controller's grammar accepted this line.
+#   gap     nobody has checked it. The reason is the controller's own words.
+#           Every one of these is a line an operator can be handed that no
+#           device has ever confirmed -- the count is on the line above, and it
+#           is meant to be read, not to become furniture.
+#   absent  the keyword is not in this platform's grammar at all, so this
+#           controller cannot answer. Listed in PLATFORM_ABSENT in
+#           tools/catalog_lines.py with what it would take to settle.
+#
+# 204 lines: ok=170  gap=30  absent=4
+ok	AOS8-AAA-ENFORCE-DHCP-001	apply	aaa profile <name>
+ok	AOS8-AAA-ENFORCE-DHCP-001	apply	enforce-dhcp
+ok	AOS8-AAA-ENFORCE-DHCP-001	rollback	aaa profile <name>
+ok	AOS8-AAA-ENFORCE-DHCP-001	rollback	no enforce-dhcp
+ok	AOS8-ADMIN-POLICY-002	apply	interface gigabitethernet <port>
+ok	AOS8-ADMIN-POLICY-002	apply	ip access-group session <admin-policy>
+ok	AOS8-ADMIN-POLICY-002	rollback	interface gigabitethernet <port>
+ok	AOS8-ADMIN-POLICY-002	rollback	no ip access-group session
+ok	AOS8-AP-CONSOLE-PROTECT-001	apply	ap system-profile <name>
+ok	AOS8-AP-CONSOLE-PROTECT-001	apply	ap-console-protection
+ok	AOS8-AP-CONSOLE-PROTECT-001	apply	ap-console-password <strong-value>
+ok	AOS8-AP-CONSOLE-PROTECT-001	rollback	ap system-profile <name>
+ok	AOS8-AP-CONSOLE-PROTECT-001	rollback	no ap-console-protection
+ok	AOS8-AP-TELNET-DEBUG-001	apply	ap system-profile <name>
+ok	AOS8-AP-TELNET-DEBUG-001	apply	no telnet
+ok	AOS8-AP-TELNET-DEBUG-001	rollback	ap system-profile <name>
+ok	AOS8-AP-TELNET-DEBUG-001	rollback	telnet
+ok	AOS8-AUTH-LDAP-LDAPS-001	apply	aaa authentication-server ldap <name>
+gap	AOS8-AUTH-LDAP-LDAPS-001	apply	authport 636	runs inside 'aaa authentication-server ldap <name>', which this tool will not enter: no LDAP server exists on a stock controller to enter
+ok	AOS8-AUTH-RADIUS-PORTS-001	apply	aaa authentication-server radius <name>
+gap	AOS8-AUTH-RADIUS-PORTS-001	apply	authport 1812	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+gap	AOS8-AUTH-RADIUS-PORTS-001	apply	acctport 1813	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+ok	AOS8-AUTH-SERVER-001	apply	aaa authentication-server radius <name>
+gap	AOS8-AUTH-SERVER-001	apply	host <ip>	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+gap	AOS8-AUTH-SERVER-001	apply	key <secret>	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+gap	AOS8-AUTH-SERVER-001	apply	enable	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+ok	AOS8-AUTH-SERVER-001	rollback	no aaa authentication-server radius <name>
+ok	AOS8-AUTH-SERVERGROUP-001	apply	aaa server-group <name>
+gap	AOS8-AUTH-SERVERGROUP-001	apply	auth-server <radius-or-ldap-or-tacacs-server>	the controller did not enter 'aaa server-group default', so the rest of this block could not be checked in context -- it said: Cannot modify existing server-group from different node in config path
+ok	AOS8-AUTH-SERVERGROUP-001	rollback	no aaa server-group <name>
+ok	AOS8-AUTH-SERVERGROUP-NONDEFAULT-001	apply	aaa profile <p>
+ok	AOS8-AUTH-SERVERGROUP-NONDEFAULT-001	apply	dot1x-server-group <external-radius-group>
+ok	AOS8-AUTH-TACACS-SESSIONAUTH-001	apply	aaa authentication-server tacacs <name>
+gap	AOS8-AUTH-TACACS-SESSIONAUTH-001	apply	session-authorization	runs inside 'aaa authentication-server tacacs <name>', which this tool will not enter: no TACACS+ server exists on a stock controller to enter
+gap	AOS8-AUTH-TACACS-SESSIONAUTH-001	apply	enable	runs inside 'aaa authentication-server tacacs <name>', which this tool will not enter: no TACACS+ server exists on a stock controller to enter
+ok	AOS8-CPSEC-001	apply	control-plane-security
+ok	AOS8-CPSEC-001	apply	cpsec-enable
+ok	AOS8-CPSEC-001	rollback	control-plane-security
+ok	AOS8-CPSEC-001	rollback	no cpsec-enable
+ok	AOS8-CRYPTO-ISAKMP-LEGACYDH-001	apply	no crypto isakmp policy 10001
+ok	AOS8-CRYPTO-ISAKMP-LEGACYDH-001	apply	no crypto isakmp policy 10002
+ok	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	crypto isakmp policy 20
+gap	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	version v2	runs inside 'crypto isakmp policy 20', which this tool will not enter: entering IKE policy 20 would create it
+gap	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	group 14	runs inside 'crypto isakmp policy 20', which this tool will not enter: entering IKE policy 20 would create it
+gap	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	authentication RSA-sig	runs inside 'crypto isakmp policy 20', which this tool will not enter: entering IKE policy 20 would create it
+gap	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	exit	not reached: the sweep was already at (config)
+ok	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	crypto dynamic-map default-ikev2-dynamicmap 10000
+gap	AOS8-CRYPTO-ISAKMP-STRENGTH-001	apply	set pfs group14	runs inside 'crypto dynamic-map default-ikev2-dynamicmap 10000', which this tool will not enter: entering this dynamic-map entry would create it
+ok	AOS8-CRYPTO-ISAKMP-STRENGTH-001	rollback	no crypto isakmp policy 20
+ok	AOS8-CRYPTO-SSH-CIPHERS-001	apply	ssh disable-ciphers aes-cbc
+ok	AOS8-CRYPTO-SSH-CIPHERS-001	apply	ssh disable-mac hmac-sha1-96
+ok	AOS8-CRYPTO-SSH-CIPHERS-001	rollback	no ssh disable-ciphers
+ok	AOS8-CRYPTO-SSH-CIPHERS-001	rollback	no ssh disable-mac
+ok	AOS8-CRYPTO-TKIP-001	apply	wlan ssid-profile <name>
+ok	AOS8-CRYPTO-TKIP-001	apply	opmode wpa2-aes
+ok	AOS8-CRYPTO-TLS-001	apply	web-server profile
+ok	AOS8-CRYPTO-TLS-001	apply	ssl-protocol tlsv1.2
+ok	AOS8-CRYPTO-WEBCIPHERS-001	apply	web-server profile
+ok	AOS8-CRYPTO-WEBCIPHERS-001	apply	no cipher-suite
+ok	AOS8-DOT1X-001	apply	aaa profile <p>
+ok	AOS8-DOT1X-001	apply	authentication-dot1x <prof>
+ok	AOS8-DOT1X-001	apply	dot1x-default-role <role>
+ok	AOS8-DOT1X-001	apply	dot1x-server-group <grp>
+ok	AOS8-FW-ARPSPOOF-001	apply	firewall
+ok	AOS8-FW-ARPSPOOF-001	apply	prohibit-arp-spoofing
+ok	AOS8-FW-ARPSPOOF-001	rollback	firewall
+ok	AOS8-FW-ARPSPOOF-001	rollback	no prohibit-arp-spoofing
+ok	AOS8-FW-CP-ACL-001	apply	firewall cp
+ok	AOS8-FW-CP-ACL-001	apply	ipv4 permit <mgmt-subnet> <mask> proto ssh
+ok	AOS8-FW-CP-ACL-001	apply	ipv4 deny any proto ssh
+ok	AOS8-FW-CP-ACL-001	apply	ipv4 permit host <mgmt-host> proto 6 ports 4343 4343
+ok	AOS8-FW-CP-ACL-001	apply	ipv4 deny any proto 6 ports 4343 4343
+ok	AOS8-FW-CP-ATTACKRATE-001	apply	firewall
+ok	AOS8-FW-CP-ATTACKRATE-001	apply	attack-rate cp 20
+ok	AOS8-FW-CP-ATTACKRATE-001	rollback	firewall
+ok	AOS8-FW-CP-ATTACKRATE-001	rollback	no attack-rate cp
+ok	AOS8-FW-CP-BWCONTRACT-001	apply	firewall
+ok	AOS8-FW-CP-BWCONTRACT-001	apply	cp-bandwidth-contract untrusted-ucast 20
+ok	AOS8-FW-CP-BWCONTRACT-001	apply	cp-bandwidth-contract untrusted-mcast 4
+ok	AOS8-FW-CP-BWCONTRACT-001	apply	cp-bandwidth-contract trusted-ucast 160
+ok	AOS8-FW-CP-BWCONTRACT-001	apply	cp-bandwidth-contract trusted-mcast 4
+ok	AOS8-FW-DENY-INTER-USER-001	apply	firewall
+ok	AOS8-FW-DENY-INTER-USER-001	apply	deny-inter-user-traffic
+ok	AOS8-FW-DENY-INTER-USER-001	rollback	firewall
+ok	AOS8-FW-DENY-INTER-USER-001	rollback	no deny-inter-user-traffic
+ok	AOS8-FW-IPSPOOF-001	apply	firewall
+ok	AOS8-FW-IPSPOOF-001	apply	prohibit-ip-spoofing
+ok	AOS8-FW-IPSPOOF-001	rollback	firewall
+ok	AOS8-FW-IPSPOOF-001	rollback	no prohibit-ip-spoofing
+ok	AOS8-FW-LOCALVALIDUSERS-001	apply	firewall
+ok	AOS8-FW-LOCALVALIDUSERS-001	apply	local-valid-users
+ok	AOS8-FW-LOCALVALIDUSERS-001	rollback	firewall
+ok	AOS8-FW-LOCALVALIDUSERS-001	rollback	no local-valid-users
+ok	AOS8-GLOBAL-BANNER-001	apply	banner motd <delim>
+gap	AOS8-GLOBAL-BANNER-001	apply	<approved text>	message text, not a command: the parser is storing these bytes, not reading them
+gap	AOS8-GLOBAL-BANNER-001	apply	<delim>	message text, not a command: the parser is storing these bytes, not reading them
+ok	AOS8-GLOBAL-BANNER-001	rollback	no banner motd
+absent	AOS8-GLOBAL-FIPS-001	apply	fips enable	'fips' is absent from the config-mode keyword list of a non-FIPS image. Needs a controller running a FIPS image to settle.
+absent	AOS8-GLOBAL-FIPS-001	rollback	no fips enable	same image difference as the apply line: 'no fips' is not offered either.
+absent	AOS8-GLOBAL-LCD-001	apply	lcd-menu	an MC-VA has no LCD panel, so 'lcd-menu' is not in its grammar. Needs a hardware controller with a front panel to settle.
+gap	AOS8-GLOBAL-LCD-001	apply	disable menu	the controller did not enter 'lcd-menu', so the rest of this block could not be checked in context -- it said: ^ Invalid input detected at '^' marker.
+absent	AOS8-GLOBAL-LCD-001	rollback	lcd-menu	same hardware difference as the apply line.
+gap	AOS8-GLOBAL-LCD-001	rollback	no disable menu	the controller did not enter 'lcd-menu', so the rest of this block could not be checked in context -- it said: ^ Invalid input detected at '^' marker.
+ok	AOS8-GLOBAL-NTP-001	apply	ntp server <ip> key <id>
+ok	AOS8-GLOBAL-NTP-001	apply	ntp authenticate
+ok	AOS8-GLOBAL-NTP-001	apply	ntp authentication-key <id> md5 <secret>
+ok	AOS8-GLOBAL-NTP-001	apply	ntp trusted-key <id>
+ok	AOS8-GLOBAL-NTP-001	rollback	no ntp server <ip>
+ok	AOS8-GLOBAL-NTP-001	rollback	no ntp authenticate
+ok	AOS8-GLOBAL-NTP-001	rollback	no ntp trusted-key <id>
+ok	AOS8-GLOBAL-STP-001	apply	no spanning-tree
+ok	AOS8-GLOBAL-STP-001	rollback	spanning-tree
+ok	AOS8-GLOBAL-SYSLOG-001	apply	logging <syslog-server-ip>
+ok	AOS8-GLOBAL-SYSLOG-001	rollback	no logging <syslog-server-ip>
+ok	AOS8-GLOBAL-TIMEOUT-001	apply	loginsession timeout 5
+ok	AOS8-GLOBAL-TIMEOUT-002	apply	web-server profile
+ok	AOS8-GLOBAL-TIMEOUT-002	apply	session-timeout 360
+ok	AOS8-INIT-002	apply	hostname <site-specific-name>
+ok	AOS8-INIT-TIMEZONE-001	apply	clock timezone <IANA-zone> <utc-offset>
+ok	AOS8-INIT-TIMEZONE-001	rollback	no clock timezone
+ok	AOS8-MGMT-CENTRALAUTH-001	apply	aaa authentication-server radius <name>
+gap	AOS8-MGMT-CENTRALAUTH-001	apply	host <ip>	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+gap	AOS8-MGMT-CENTRALAUTH-001	apply	key <secret>	runs inside 'aaa authentication-server radius <name>', which this tool will not enter: no RADIUS server exists on a stock controller to enter
+gap	AOS8-MGMT-CENTRALAUTH-001	apply	exit	not reached: the sweep was already at (config)
+ok	AOS8-MGMT-CENTRALAUTH-001	apply	aaa server-group <grp>
+gap	AOS8-MGMT-CENTRALAUTH-001	apply	auth-server <name>	the controller did not enter 'aaa server-group default', so the rest of this block could not be checked in context -- it said: Cannot modify existing server-group from different node in config path
+gap	AOS8-MGMT-CENTRALAUTH-001	apply	exit	not reached: the sweep was already at (config)
+ok	AOS8-MGMT-CENTRALAUTH-001	apply	aaa authentication mgmt
+ok	AOS8-MGMT-CENTRALAUTH-001	apply	enable
+ok	AOS8-MGMT-CENTRALAUTH-001	apply	mschapv2
+ok	AOS8-MGMT-CENTRALAUTH-001	apply	server-group <grp>
+ok	AOS8-MGMT-CENTRALAUTH-001	rollback	aaa authentication mgmt
+ok	AOS8-MGMT-CENTRALAUTH-001	rollback	no server-group
+ok	AOS8-MGMT-CONSOLE-BLOCK-001	apply	mgmt-user console-block
+ok	AOS8-MGMT-CONSOLE-BLOCK-001	rollback	no mgmt-user console-block
+ok	AOS8-MGMT-LOCALAUTH-001	apply	no mgmt-user localauth
+ok	AOS8-MGMT-LOCALAUTH-001	rollback	mgmt-user localauth
+ok	AOS8-MGMT-PWDPOL-001	apply	aaa password-policy mgmt
+ok	AOS8-MGMT-PWDPOL-001	apply	enable
+ok	AOS8-MGMT-PWDPOL-001	apply	password-min-length 15
+ok	AOS8-MGMT-PWDPOL-001	apply	password-not-username
+ok	AOS8-MGMT-PWDPOL-001	apply	password-lock-out 3
+ok	AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001	apply	no telnet cli
+ok	AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001	apply	no telnet soe
+ok	AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001	rollback	telnet cli
+ok	AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001	rollback	telnet soe
+ok	AOS8-MGMT-SSH-PUBKEY-001	apply	ssh mgmt-auth public-key
+ok	AOS8-MGMT-SSH-PUBKEY-001	rollback	no ssh mgmt-auth public-key
+ok	AOS8-MGMT-WEBUI-CERTAUTH-001	apply	web-server profile
+ok	AOS8-MGMT-WEBUI-CERTAUTH-001	apply	mgmt-auth certificate
+ok	AOS8-MGMT-WEBUI-CERTAUTH-001	apply	switch-cert <cert>
+ok	AOS8-MGMT-WEBUI-CERTAUTH-001	rollback	web-server profile
+ok	AOS8-MGMT-WEBUI-CERTAUTH-001	rollback	no mgmt-auth
+ok	AOS8-NET-CTRLIP-001	rollback	controller-ip vlan <id>
+ok	AOS8-NET-DEFAULTVLAN-001	apply	interface vlan 1
+ok	AOS8-NET-DEFAULTVLAN-001	apply	no ip address
+ok	AOS8-NET-DEFAULTVLAN-001	apply	no operstate up
+ok	AOS8-NET-DEFAULTVLAN-001	apply	shutdown
+ok	AOS8-NET-GW-001	apply	ip default-gateway <gateway-ip>
+ok	AOS8-NET-GW-001	rollback	no ip default-gateway <gateway-ip>
+ok	AOS8-NET-IPV6-ENABLED-001	apply	ipv6 enable
+ok	AOS8-NET-IPV6-ENABLED-001	rollback	no ipv6 enable
+ok	AOS8-NET-MGMTIF-001	apply	interface vlan <mgmt-id>
+ok	AOS8-NET-MGMTIF-001	apply	ip address <site-ip> <mask>
+ok	AOS8-NET-VLAN-STATICIP-001	apply	interface vlan <id>
+ok	AOS8-NET-VLAN-STATICIP-001	apply	ip address <ip> <mask>
+ok	AOS8-NET-VRRP-001	apply	vrrp <id>
+gap	AOS8-NET-VRRP-001	apply	ip address <vip>	runs inside 'vrrp <id>', which this tool will not enter: entering a VRRP instance would create it
+gap	AOS8-NET-VRRP-001	apply	authentication <strong-secret>	runs inside 'vrrp <id>', which this tool will not enter: entering a VRRP instance would create it
+gap	AOS8-NET-VRRP-001	apply	vlan <id>	runs inside 'vrrp <id>', which this tool will not enter: entering a VRRP instance would create it
+gap	AOS8-NET-VRRP-001	apply	no shutdown	runs inside 'vrrp <id>', which this tool will not enter: entering a VRRP instance would create it
+ok	AOS8-NET-VRRP-AUTH-001	apply	vrrp <id>
+gap	AOS8-NET-VRRP-AUTH-001	apply	authentication <strong-non-default-secret>	runs inside 'vrrp <id>', which this tool will not enter: entering a VRRP instance would create it
+ok	AOS8-PORTS-CAPTIVE-PORTAL-001	apply	firewall cp
+ok	AOS8-PORTS-CAPTIVE-PORTAL-001	apply	ipv4 deny any proto 6 ports 8080 8083
+ok	AOS8-PORTS-CAPTIVE-PORTAL-001	apply	ipv4 deny any proto 6 ports 8088 8088
+ok	AOS8-PORTS-DNS-RESPONDER-001	apply	no ip domain lookup
+ok	AOS8-ROLE-DEFAULTROLE-001	apply	aaa profile <p>
+ok	AOS8-ROLE-DEFAULTROLE-001	apply	dot1x-default-role <authenticated-role>
+ok	AOS8-ROLE-INITROLE-001	apply	aaa profile <p>
+ok	AOS8-ROLE-INITROLE-001	apply	initial-role logon
+ok	AOS8-ROLE-MACHINEROLES-001	apply	aaa authentication dot1x <prof>
+ok	AOS8-ROLE-MACHINEROLES-001	apply	machine-authentication machine-default-role <role>
+ok	AOS8-ROLE-MACHINEROLES-001	apply	machine-authentication user-default-role <role>
+ok	AOS8-ROLE-RA-GUARD-001	apply	user-role <name>
+ok	AOS8-ROLE-RA-GUARD-001	apply	access-list session ra-guard
+ok	AOS8-ROLE-RA-GUARD-001	rollback	user-role <name>
+ok	AOS8-ROLE-RA-GUARD-001	rollback	no access-list session ra-guard
+ok	AOS8-ROLE-SRVDERIV-001	apply	aaa server-group <grp>
+gap	AOS8-ROLE-SRVDERIV-001	apply	set role condition <attr> <op> <value> set-value <role>	the controller did not enter 'aaa server-group default', so the rest of this block could not be checked in context -- it said: Cannot modify existing server-group from different node in config path
+ok	AOS8-ROLE-UDP6869-DENY-001	apply	ip access-list session <admin-policy>
+gap	AOS8-ROLE-UDP6869-DENY-001	apply	user any udp 68 69 deny	runs inside 'ip access-list session <admin-policy>', which this tool will not enter: 'ip access-list session ?' offers only <accname>, never the names that already exist, so no borrowed name can be shown to be a no-op first
+ok	AOS8-WLAN-001	apply	wlan ssid-profile <p>
+ok	AOS8-WLAN-001	apply	opmode wpa2-aes
+ok	AOS8-WLAN-FWDMODE-001	apply	wlan virtual-ap <p>
+ok	AOS8-WLAN-FWDMODE-001	apply	forward-mode tunnel
+ok	AOS8-WLAN-HIDESSID-001	apply	wlan ssid-profile <p>
+ok	AOS8-WLAN-HIDESSID-001	apply	hide-ssid
+ok	AOS8-WLAN-HIDESSID-001	apply	deny-bcast
+ok	AOS8-WLAN-HIDESSID-001	rollback	wlan ssid-profile <p>
+ok	AOS8-WLAN-HIDESSID-001	rollback	no hide-ssid
+ok	AOS8-WLAN-HIDESSID-001	rollback	no deny-bcast
+ok	AOS8-WLAN-VLAN-001	apply	wlan virtual-ap <p>
+ok	AOS8-WLAN-VLAN-001	apply	vlan <id>

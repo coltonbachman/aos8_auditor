@@ -1,0 +1,233 @@
+# Firewall, control-path defense and CPsec controls from the ArubaOS 8 Controller
+# Hardening Guide (rev 10, January 2023): "Control Path Defense" p.23,
+# "Access Control" p.25, "Global Firewall Settings" p.55-56, "CPsec" p.20.
+#
+# None of these directives appear anywhere in the 2020 Federal Technology Guide.
+
+- id: AOS8-FW-IPSPOOF-001
+  title: IP spoofing prohibited (firewall prohibit-ip-spoofing)
+  category: firewall
+  severity: high
+  description: >-
+    Locks an IP address to a MAC address. This is what stops an attacker cloning
+    another user's IP, and it defeats the practical exploitation of the 'Hole 196'
+    WPA2 GTK man-in-the-middle: the ARP poisoning may still land, but traffic sent
+    to the attacker's MAC with a destination IP that is not the attacker's
+    assigned address gets dropped.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_firewall, command: show firewall}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fw_prohibit_ip_spoofing}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: fw_prohibit_ip_spoofing}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; firewall ; prohibit-ip-spoofing"
+  references:
+    - {guide_section: "Global Firewall Settings - Prohibit IP Spoofing", page: 55, document: controller_2023}
+
+- id: AOS8-FW-ARPSPOOF-001
+  title: ARP spoofing prohibited (firewall prohibit-arp-spoofing)
+  category: firewall
+  severity: medium
+  description: >-
+    Blocks a wireless client from sending ARP responses or gratuitous ARP for an
+    IP/MAC pairing that is not its own - the complement to prohibit-ip-spoofing,
+    stopping the poisoning attempt rather than only its payoff.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_firewall, command: show firewall}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fw_prohibit_arp_spoofing}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: fw_prohibit_arp_spoofing}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; firewall ; prohibit-arp-spoofing"
+  references:
+    - {guide_section: "Global Firewall Settings - Prohibit ARP Spoofing", page: 55, document: controller_2023}
+
+- id: AOS8-FW-DENY-INTER-USER-001
+  title: Inter-user traffic denied (globally or on every virtual AP)
+  category: firewall
+  severity: medium
+  description: >-
+    Prevents wireless users from reaching each other, removing the lateral
+    movement path between clients on the same infrastructure. Reported as a WARN
+    rather than a FAIL because the guide is emphatic that it 'may have significant
+    impacts on network behavior' - all peer-to-peer traffic (AirPlay, Chromecast,
+    printer discovery, file sharing) breaks. Enable it globally, or per-SSID in
+    the virtual-ap profile where peer-to-peer is genuinely not needed.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_firewall, command: show firewall}
+    - {key: wlan_virtual_ap, command: show wlan virtual-ap}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fw_deny_inter_user}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: fw_deny_inter_user}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; firewall ; deny-inter-user-traffic   OR per-SSID: wlan virtual-ap <name> ; deny-inter-user-traffic. The less-restrictive 'deny-inter-user-bridging' blocks only non-IP traffic but also breaks ARP between clients, so pair it with 'interface vlan <x> ; ip local-proxy-arp'."
+  references:
+    - {guide_section: "Global Firewall Settings - Preventing Inter-User Traffic", page: 55, document: controller_2023}
+    - {guide_section: "Non-Global Firewall Settings - Preventing Inter-User Traffic", page: 56, document: controller_2023}
+
+- id: AOS8-FW-LOCALVALIDUSERS-001
+  title: User table restricted to valid client addresses
+  category: firewall
+  severity: medium
+  description: >-
+    The default 'validuser' ACL denies a handful of reserved ranges and then
+    permits everything else, so a client that statically assigns itself the DNS
+    server's address can insert that address into the user table and cause a
+    denial of service. Passing requires either 'firewall local-valid-users' (only
+    addresses inside locally defined VLAN interfaces are accepted - needs an IP
+    interface in every wireless subnet) or a validuser ACL narrowed past its
+    default 'any any any permit'.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_firewall, command: show firewall}
+    - {key: validuser_acl, command: show ip access-list validuser}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: fw_local_valid_users}
+        then: pass
+      - when: {source: fact, predicate: fact_true, arg: fw_validuser_narrowed}
+        then: pass
+      - when: {source: fact, predicate: fact_unknown, arg: fw_local_valid_users}
+        then: manual
+      - else: warn
+  remediation_hint: "configure terminal ; firewall ; local-valid-users   OR narrow the ACL: ip access-list session validuser ; network <client-subnet> <mask> any any permit ; no any any any permit ; any any any deny"
+  references:
+    - {guide_section: "Valid IP Address ACL", page: 54, document: controller_2023}
+
+- id: AOS8-FW-CP-ATTACKRATE-001
+  title: Control-path attack rate limiting enabled (firewall attack-rate cp)
+  category: firewall
+  severity: medium
+  description: >-
+    'Monitor/police CP attacks' bounds how fast a single source may hit the
+    controller's own control plane. Traffic addressed to any IP belonging to the
+    controller is subject to it, so this is the first line of defense for the
+    management plane against flooding from an untrusted interface.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_firewall, command: show firewall}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fw_cp_attack_rate_set}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: fw_cp_attack_rate_set}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; firewall ; attack-rate cp 20   (verify with 'show firewall' -> Monitor/police CP attacks)"
+  references:
+    - {guide_section: "Control Path Defense", page: 23, document: controller_2023}
+
+- id: AOS8-FW-CP-BWCONTRACT-001
+  title: Control-plane bandwidth contracts configured
+  category: firewall
+  severity: medium
+  description: >-
+    Per-class rate limits on control-plane traffic (untrusted and trusted unicast
+    and multicast, route, session-mirror and auth-process). Without them, a flood
+    from an untrusted interface competes freely with legitimate control traffic.
+    Four contracts are the documented baseline (untrusted ucast/mcast, trusted
+    ucast/mcast).
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_firewall, command: show firewall}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fw_cp_bw_contract_count}
+        then: manual
+      - when: {source: fact, predicate: fact_gte, arg: {path: fw_cp_bw_contract_count, value: 4}}
+        then: pass
+      - else: warn
+  # The rate is a bare number. 'cp-bandwidth-contract untrusted-ucast ?' answers
+  # '<1-65535> pps', which names the unit of the value rather than a keyword to
+  # type: the controller prints 'cp-bandwidth-contract untrusted-ucast 9765' in
+  # its own running config, and a line with 'pps' in it is refused.
+  remediation_hint: "configure terminal ; firewall ; cp-bandwidth-contract untrusted-ucast 20 ; cp-bandwidth-contract untrusted-mcast 4 ; cp-bandwidth-contract trusted-ucast 160 ; cp-bandwidth-contract trusted-mcast 4   (rates are in packets per second. These four are the guide's figures and they are a floor, not a target -- an 8.13 controller's own defaults are hundreds of times higher: 9765 untrusted-ucast, 1953 untrusted-mcast, 65535 trusted-ucast, 1953 trusted-mcast. Pick a value between the two for your own auth and captive-portal burst rate rather than pasting either end.)"
+  references:
+    - {guide_section: "Control Path Defense", page: 23, document: controller_2023}
+
+- id: AOS8-FW-CP-ACL-001
+  title: Control-plane service ACL restricts administrative access
+  category: firewall
+  severity: medium
+  description: >-
+    'By default, all traffic for ArubaOS control interfaces is permitted from any
+    destination.' The service ACL ('firewall cp') is the simplest way to limit
+    SSH and the WebUI to an administrative subnet or host; administrator-defined
+    rules override the built-in ones. Requires 'show firewall-cp', because these
+    rules are not visible in running-config when none have been added.
+  applicability:
+    requires_evidence: [firewall_cp]
+  evidence:
+    - {key: firewall_cp, command: show firewall-cp}
+    - {key: firewall_cp_internal, command: show firewall-cp internal}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fw_cp_acl_rule_count}
+        then: manual
+      - when: {source: fact, predicate: fact_gte, arg: {path: fw_cp_acl_rule_count, value: 1}}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; firewall cp ; ipv4 permit <mgmt-subnet> <mask> proto ssh ; ipv4 deny any proto ssh ; ipv4 permit host <mgmt-host> proto 6 ports 4343 4343 ; ipv4 deny any proto 6 ports 4343 4343   -- RISK: put your own management host in the permit rules first or you will lock yourself out."
+  references:
+    - {guide_section: "Locking Down Administrative Access - Access Control", page: 25, document: controller_2023}
+
+- id: AOS8-CPSEC-001
+  title: Control Plane Security (CPsec) enabled
+  category: firewall
+  severity: high
+  description: >-
+    CPsec forces all control-channel traffic between Aruba network elements
+    (configuration updates, AP control) into IPsec tunnels authenticated with the
+    X.509 certificates provisioned at manufacture, whose private keys live in each
+    device's TPM. Certificate authentication is far stronger than a pre-shared
+    key and every Aruba device ships pre-provisioned, so this is cheap to turn on.
+    Cannot be read from running-config - the 'control-plane-security' stanza
+    renders empty at defaults - so this needs 'show control-plane-security'.
+  applicability:
+    requires_evidence: [control_plane_security]
+  evidence:
+    - {key: control_plane_security, command: show control-plane-security}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: cpsec_enabled}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: cpsec_enabled}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; control-plane-security ; cpsec-enable   -- APs rebuild their control channel and reboot as they re-provision; stage this in a change window."
+  references:
+    - {guide_section: "Cryptography - CPsec", page: 20, document: controller_2023}

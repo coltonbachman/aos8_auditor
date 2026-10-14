@@ -1,0 +1,19 @@
+# Accepted-risk suppressions. Each entry REQUIRES a justification and SHOULD set
+# an expiry; a suppressed finding stays in the report (marked suppressed) and is
+# excluded from the posture score. Expired suppressions stop suppressing and are
+# flagged; suppressions that match nothing are flagged as stale. Copy to
+# suppressions.yaml and pass with: aos8-audit ... --suppressions suppressions.yaml
+#
+# - control_id: AOS8-...        # required
+#   justification: "ticket/owner/why"   # required
+#   expires: "YYYY-MM-DD"       # recommended (omit = never expires, discouraged)
+#   host: wlc1.example.gov      # optional: narrow to one target
+
+- control_id: AOS8-GLOBAL-LCD-001
+  justification: "JIRA SEC-1234: 7205 is in a locked cage; LCD risk accepted until refresh"
+  expires: "2026-12-31"
+
+- control_id: AOS8-WIP-AM-001
+  justification: "No dedicated AMs at this small site; all APs scan part-time (risk accepted)"
+  expires: "2026-09-30"
+  host: wlc-branch3

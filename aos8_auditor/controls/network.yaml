@@ -1,0 +1,126 @@
+# Network / interface hardening controls.
+- id: AOS8-NET-DEFAULTVLAN-001
+  title: Default VLAN 1 secured (no controller IP / no address / shutdown)
+  category: network
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: controller_ip, command: show controller-ip}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: controller_ip_on_vlan1}
+        then: fail
+      - when: {source: fact, predicate: fact_false, arg: vlan1_present}
+        then: pass
+      - when: {source: fact, predicate: fact_true, arg: vlan1_hardened}
+        then: pass
+      - else: fail
+  remediation_hint: "interface vlan 1 ; no ip address ; no operstate up ; shutdown ; ensure controller-ip is not VLAN 1."
+  references: [{guide_section: "Securing the Default VLAN", ref: "2804-2879"}]
+
+- id: AOS8-NET-CTRLIP-001
+  title: Controller IP on a non-default VLAN/loopback
+  category: network
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: controller_ip, command: show controller-ip}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: controller_ip_source}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: controller_ip_on_vlan1}
+        then: fail
+      - else: pass
+  remediation_hint: "controller-ip vlan <id>  (a dedicated management VLAN or loopback; requires reboot)."
+  references: [{guide_section: "Configuring the Controller IP Address", ref: "2880-2912"}]
+
+- id: AOS8-NET-GW-001
+  title: Default gateway configured
+  category: network
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: default_gateway_present}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; ip default-gateway <gateway-ip>"
+  references: [{guide_section: "Configuring the Default Gateway", ref: "2913-2960"}]
+
+- id: AOS8-NET-VRRP-001
+  title: VRRP redundancy configured where HA is required
+  category: network
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+    condition: "ha_required == true"
+  evidence:
+    - {key: vrrp, command: show vrrp}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: vrrp_present}
+        then: pass
+      - else: fail
+  remediation_hint: "vrrp <id> ; ip address <vip> ; authentication <strong-secret> ; vlan <id> ; no shutdown"
+  references: [{guide_section: "VRRP", ref: "2961-3007"}]
+
+- id: AOS8-NET-PORT-001
+  title: Unused controller ports disabled
+  category: network
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: port_status, command: show port status}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Shut down unused interfaces. (Which ports are 'unused' is topology/intent — confirm against the port plan.)"
+  references: [{guide_section: "Disable Unused Ports", ref: "2698-2705"}]
+
+- id: AOS8-ADMIN-POLICY-001
+  title: Administrative access policy defined
+  category: network
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: netdestination, command: show netdestination}
+    - {key: ip_access_list, command: show ip access-list brief}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: admin_policy_defined}
+        then: pass
+      - else: warn
+  remediation_hint: "Define netdestinations + an admin-only session ACL permitting only mgmt hosts (HTTPS 4343, svc-ssh, svc-snmp)."
+  references: [{guide_section: "Configuring Administrative Port Policy", ref: "3955-4027"}]
+
+- id: AOS8-ADMIN-POLICY-002
+  title: Administrative access policy applied to a controller port
+  category: network
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_false, arg: admin_policy_defined}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: admin_policy_applied}
+        then: pass
+      - else: fail
+  remediation_hint: "interface gigabitethernet <port> ; ip access-group session <admin-policy>  (the guide prints this as 'ip access-group <admin-policy> session'; an 8.13 parser rejects that ordering and wants the keyword first)"
+  references: [{guide_section: "Apply the Administrative Policy to a Controller Port", ref: "4031-4046"}]

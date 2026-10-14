@@ -1,0 +1,112 @@
+# Roles/policy, WIP, physical, and initial-setup controls.
+- id: AOS8-ROLE-POLICY-001
+  title: User roles are restrictive (no 'any any any permit')
+  category: roles-policy
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: rights, command: show rights}
+    - {key: ip_access_list, command: show ip access-list brief}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: any_any_any_permit}
+        then: fail
+      - else: pass
+  remediation_hint: "Replace permit-all policies with least-privilege source/dest/service rules; restrict guest/initial roles."
+  references: [{guide_section: "Roles and Policies", ref: "3838-3917"}]
+
+- id: AOS8-WIP-LIC-001
+  title: RFProtect license present where WIP is required
+  category: wip
+  severity: high
+  applicability:
+    requires_evidence: [license_summary]
+    condition: "wip_required == true"
+  evidence:
+    - {key: license_summary, command: show license summary}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: rfprotect_licensed}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: rfprotect_licensed}
+        then: pass
+      - else: fail
+  remediation_hint: "Install RFProtect on every controller terminating APs/AMs that must perform WIP."
+  references: [{guide_section: "Wireless Intrusion Detection and Protection", ref: "4051-4077"}]
+
+- id: AOS8-WIP-AM-001
+  title: Dedicated Air-Monitor group present where WIP is required
+  category: wip
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: ap_group, command: show ap-group}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: am_group_present}
+        then: pass
+      - else: warn
+  remediation_hint: "Create an AM-only AP group with dot11a/dot11g radio profiles in am-mode (both bands) and assign APs."
+  references: [{guide_section: "Dedicated Air Monitor Configuration", ref: "4115-4161"}]
+
+- id: AOS8-WIP-DASHBOARD-001
+  title: Rogue / interfering AP and blacklist status reviewed
+  category: wip
+  severity: informational
+  applicability:
+    requires_evidence: [wms_rogue_ap]
+  evidence:
+    - {key: wms_rogue_ap, command: show wms rogue-ap}
+    - {key: blacklist_clients, command: show ap blacklist-clients}
+  remediation_hint: "Review rogue/interfering AP counts and client blacklist on the security dashboard (point-in-time, informational)."
+  references: [{guide_section: "Rogue AP Detection / Monitoring Dashboard", ref: "4079-4113"}]
+
+- id: AOS8-PHYS-TEL-001
+  title: Tamper-evident labels applied and logged (FIPS)
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  remediation_hint: "Crypto Officer applies the required TELs, records each position+serial in the security log, allows 24h cure."
+  references: [{guide_section: "Tamper-Evident Labels", ref: "4286-4401"}]
+
+- id: AOS8-PHYS-INSTALL-001
+  title: Physical installation prerequisites and precautions met
+  category: physical
+  severity: manual
+  remediation_hint: "Confirm rack/clearance/power/environment and anti-static handling per the pre-installation checklist."
+  references: [{guide_section: "Security Policy / Pre-Installation Checklist", ref: "4164-4257"}]
+
+- id: AOS8-INIT-001
+  title: Default admin password changed
+  category: initial-setup
+  severity: manual
+  evidence: [{key: mgmt_user, command: show mgmt-user}]
+  remediation_hint: "Cannot verify the password value read-only; confirm the startup admin password was changed from default."
+  references: [{guide_section: "Startup Script", ref: "499-503"}]
+
+- id: AOS8-INIT-002
+  title: Hostname set to a non-default value
+  category: initial-setup
+  severity: low
+  applicability:
+    requires_evidence: [running_config]
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*hostname\\s+\"?Aruba\\d"}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*hostname\\s+\\S+"}
+        then: pass
+      - else: manual
+  remediation_hint: "configure terminal ; hostname <site-specific-name>"
+  references: [{guide_section: "Startup Script", ref: "679-755"}]

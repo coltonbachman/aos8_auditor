@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Audit run output — may contain (even if redacted) sensitive evidence. Never commit.
+runs/
+
+# Local scratch
+.DS_Store
+*.tmp
+
+# Source/planning material — kept locally, not shipped to users. The packaged
+# copies of everything the tool actually needs live under aos8_auditor/.
+guide.txt
+*.pdf
+planning/
+/advisories/

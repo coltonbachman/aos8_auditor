@@ -1,0 +1,165 @@
+# Network & interface hardening controls (extended set).
+# Covers the remaining AOS8-NET-* catalog items not already authored in network.yaml:
+# management interface non-default, IPv6 on/off by intent, multi-VLAN segmentation,
+# static VLAN IP, trusted/untrusted ports & VLANs, native VLAN handling, VRRP auth.
+- id: AOS8-NET-MGMTIF-001
+  title: Management VLAN interface not left on factory-default IP (172.16.0.254)
+  category: network
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ip_interface_brief, command: show ip interface brief}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "ip address 172\\.16\\.0\\.254\\b"}
+        then: fail
+      - else: pass
+  remediation_hint: "interface vlan <mgmt-id> ; ip address <site-ip> <mask>  (replace factory default 172.16.0.254 set during startup)."
+  references: [{guide_section: "Configure controller VLAN ID and management interface", ref: "578-585"}]
+
+- id: AOS8-NET-VLAN-STATICIP-001
+  title: At least one non-default VLAN interface has a static IP address
+  category: network
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ip_interface_brief, command: show ip interface brief}
+    - {key: vlan, command: show vlan}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: nondefault_vlan_static_ip}
+        then: pass
+      - else: fail
+  remediation_hint: "interface vlan <id> ; ip address <ip> <mask>  (assign a static IP to a management/AP-termination VLAN other than VLAN 1)."
+  references: [{guide_section: "Assign a static IP address to at least one VLAN", ref: "666-674"}]
+
+- id: AOS8-NET-VLAN-SEGMENT-001
+  title: Multiple VLANs defined for segmentation (not single-VLAN)
+  category: network
+  severity: medium
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: vlan, command: show vlan}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?m)^vlan ([2-9]|[1-9]\\d+)\\b"}
+        then: pass
+      - else: fail
+  remediation_hint: "Define separate VLANs for management/AP-termination and client WLAN traffic: vlan <id>. Single-VLAN deployments are not recommended for high-security."
+  references: [{guide_section: "Define multiple VLANs for segmentation", ref: "616-624"}]
+
+- id: AOS8-NET-IPV6-DISABLED-001
+  title: IPv6 processing disabled when IPv6 is not required
+  category: network
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "ipv6_required == false"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ipv6\\s+enable\\b"}
+        then: fail
+      - else: pass
+  remediation_hint: "If IPv6 is not used, do not enable it: firewall ; no ipv6 enable. Avoids an unmanaged additional attack surface."
+  references: [{guide_section: "Disable IPv6 on the management VLAN unless required", ref: "587-594"}]
+
+- id: AOS8-NET-IPV6-ENABLED-001
+  title: IPv6 processing enabled when IPv6 is required
+  category: network
+  severity: low
+  applicability:
+    requires_evidence: [running_config]
+    condition: "ipv6_required == true"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ipv6\\s+enable\\b"}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; ipv6 enable  (required before any IPv6 client services work. The guide's transcript nests this inside 'firewall'; on 8.13 the firewall stanza has no ipv6 keyword and the knob is at the top level of config mode.)"
+  references: [{guide_section: "Enable IPv6 Processing (if IPv6 is used)", ref: "606-614"}]
+
+- id: AOS8-NET-UNTRUSTED-PORT-001
+  title: Ports facing untrusted networks set untrusted and forced through an ACL policy
+  category: network
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: port_status, command: show port status}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "For ports facing third-party APs / public areas / untrusted nets: interface gigabitethernet <p> ; no trusted ; apply a session ACL so all traffic passes a predefined policy. Which ports are untrusted is topology-dependent — review against the wiring plan."
+  references: [{guide_section: "Untrusted physical ports force traffic through ACL policy", ref: "636-644"}]
+
+- id: AOS8-NET-TRUSTED-VLAN-001
+  title: Guest/untrusted VLANs excluded from the trusted VLAN list
+  category: network
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: vlan, command: show vlan}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Both the port AND the VLAN must be trusted for traffic to be trusted. Mark only intended segments 'trusted vlan <id>'; leave guest/untrusted VLANs out so their traffic is forced through session ACL/firewall (e.g. captive portal). Trusted-VLAN set is intent-driven — review against the segmentation plan."
+  references: [{guide_section: "Trusted/untrusted VLAN classification", ref: "646-654"}]
+
+- id: AOS8-NET-PORTMODE-001
+  title: Port mode (access/trunk) and trunk allowed-VLAN list reviewed
+  category: network
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: port_status, command: show port status}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Set each port explicitly to access or trunk; on trunks restrict 'switchport trunk allowed vlan' to only the needed VLANs. Correct mode/allowed-VLAN set is topology-dependent — confirm against the port plan."
+  references: [{guide_section: "Port mode access vs trunk and native VLAN handling", ref: "626-634"}]
+
+- id: AOS8-NET-NATIVEVLAN-001
+  title: Trunk native VLAN reviewed so untagged ingress lands in the intended VLAN
+  category: network
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  remediation_hint: "On each trunk, native-VLAN frames egress untagged and untagged ingress is assigned to the native VLAN. Review 'switchport trunk native vlan <id>' so untagged production traffic maps to the correct segment and does not leak."
+  references: [{guide_section: "Care with native VLAN assignment for production traffic", ref: "735-743"}]
+
+- id: AOS8-NET-VRRP-AUTH-001
+  title: VRRP authentication string configured and not the documented weak value
+  category: network
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "ha_required == true"
+  evidence:
+    - {key: vrrp, command: show vrrp}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_false, arg: vrrp_present}
+        then: manual
+      - when: {source: running_config, predicate: regex, arg: "(?mi)^\\s*authentication\\s+aruba123\\b"}
+        then: fail
+      - when: {source: fact, predicate: fact_true, arg: vrrp_all_authenticated}
+        then: pass
+      - else: fail
+  remediation_hint: "vrrp <id> ; authentication <strong-non-default-secret>  (never use the documented placeholder 'aruba123')."
+  references: [{guide_section: "VRRP authentication string", ref: "725-733"}]

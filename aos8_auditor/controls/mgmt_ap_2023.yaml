@@ -1,0 +1,179 @@
+# Administrative lockdown, AP console/debug access and user-access controls from
+# the ArubaOS 8 Controller Hardening Guide (rev 10, January 2023):
+# "Locking Down Administrative Access" p.24-26, "Locking Down User Access" p.56.
+
+- id: AOS8-MGMT-CONSOLE-BLOCK-001
+  title: Serial console disabled in software (mgmt-user console-block)
+  category: management
+  severity: medium
+  description: >-
+    The serial console is a privileged interface - anyone with physical access can
+    run the widely published password recovery procedure and take over the 'admin'
+    account without rebooting or changing anything else. Since ArubaOS 8.0 the port
+    can be disabled in software. IMPORTANT CAVEAT from the guide - this only
+    disables the port while ArubaOS is running. After a reboot the boot ROM is
+    still reachable over the console and can be used to boot an alternative image
+    or config, or to erase flash. Tamper-evident labels over the port
+    (AOS8-PHYS-TEL-001) remain necessary. Gated to high-security/FIPS profiles
+    because it also removes your own emergency recovery path.
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: mgmt_console_blocked}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: mgmt_console_blocked}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; mgmt-user console-block   -- RISK: this is the emergency access path. Confirm working out-of-band administrative access first, and keep TELs on the port because boot ROM console access survives a reboot."
+  references:
+    - {guide_section: "Console Port and Password Recovery", page: 24, document: controller_2023}
+
+- id: AOS8-MGMT-CENTRALAUTH-001
+  title: Centralized management authentication configured (aaa authentication mgmt)
+  category: management
+  severity: high
+  description: >-
+    Administrators should authenticate against RADIUS or TACACS+ rather than local
+    accounts on each controller, so that privilege changes and departures are
+    handled in one place and the server can return the administrative role. This is
+    the method the 2023 guide PREFERS over disabling local authentication
+    (AOS8-MGMT-LOCALAUTH-001) - configure centralized auth, then set the local
+    'admin' account to a randomly generated password nobody knows, keeping the
+    console lost-password procedure as the emergency path.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_auth_mgmt, command: show aaa authentication mgmt}
+    - {key: aaa_auth_servers, command: show aaa authentication-server all}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: central_mgmt_auth}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: central_mgmt_auth}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; aaa authentication-server radius <name> ; host <ip> ; key <secret> ; exit ; aaa server-group <grp> ; auth-server <name> ; exit ; aaa authentication mgmt ; enable ; mschapv2 ; server-group <grp>. Use redundant servers, then set the local admin password to a random value."
+  references:
+    - {guide_section: "Centralized Authentication and Authorization", page: 26, document: controller_2023}
+
+- id: AOS8-AP-CONSOLE-PROTECT-001
+  title: AP console port protected or disabled
+  category: access_points
+  severity: medium
+  description: >-
+    Older ArubaOS releases let the AP RS-232 console reach a limited command shell
+    with no authentication. Modern releases set 'ap-console-protection' and a
+    randomly generated 'ap-console-password' by default, so a finding here means
+    the protection was explicitly turned off. Setting 'no console-enable' disables
+    the port outright and also passes. Only the default AP system profile is
+    resolvable from 'show ap system-profile default'; for other profiles an
+    explicit negation in running-config is still caught, but silence stays
+    undeterminable and reports manual rather than guessing.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ap_system_profile, command: show ap system-profile default}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: ap_console_protected}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: ap_console_protected}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; ap system-profile <name> ; ap-console-protection ; ap-console-password <strong-value>   (or 'no console-enable' to disable the port entirely). Changing an AP system profile reboots the APs using it."
+  references:
+    - {guide_section: "AP Console Port and Debug Access", page: 24, document: controller_2023}
+
+- id: AOS8-AP-TELNET-DEBUG-001
+  title: AP remote debug shell disabled
+  category: access_points
+  severity: medium
+  description: >-
+    'ap system-profile telnet' exposes a remote AP command shell for debugging and
+    'should be disabled when not in use'. It is off by default, so its presence in
+    running-config is an explicit enable someone left behind. Note that from
+    ArubaOS 8.7 the transport is SSH rather than telnet even though the CLI keyword
+    is unchanged - so the exposure is real on current trains, not a legacy-only
+    concern.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ap_system_profile, command: show ap system-profile default}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: ap_debug_shell_enabled}
+        then: manual
+      - when: {source: fact, predicate: fact_false, arg: ap_debug_shell_enabled}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; ap system-profile <name> ; no telnet   (APs using the profile reboot when it changes)"
+  references:
+    - {guide_section: "AP Console Port and Debug Access", page: 24, document: controller_2023}
+
+- id: AOS8-AAA-ENFORCE-DHCP-001
+  title: DHCP enforced for wireless clients (aaa profile enforce-dhcp)
+  category: authentication
+  severity: low
+  description: >-
+    With enforce-dhcp, traffic is dropped from clients that never complete a DHCP
+    negotiation and from clients that get a DHCP lease and then use a different
+    address - closing off static self-assignment, which is the precondition for
+    the IP-spoofing and user-table-poisoning attacks. Must be set on every AAA
+    profile in use; only profiles actually referenced by a virtual AP are checked,
+    because ArubaOS ships a dozen unused factory 'default-*' profiles. Reported as
+    a WARN because any legitimately static wireless client stops working.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: aaa_enforce_dhcp}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: aaa_enforce_dhcp}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; aaa profile <name> ; enforce-dhcp   (repeat for every AAA profile in use; inventory statically addressed wireless devices first)"
+  references:
+    - {guide_section: "Non-Global Firewall Settings - Enforce DHCP", page: 56, document: controller_2023}
+
+- id: AOS8-ROLE-RA-GUARD-001
+  title: RA guard applied to user roles on IPv6 networks
+  category: roles
+  severity: medium
+  description: >-
+    Where IPv6 is in use, a client can advertise itself as a router with rogue
+    router advertisements and become the default gateway for its neighbours. The
+    'ra-guard' session ACL, added to a user role, drops RAs originating from client
+    devices so only valid routers are heard. Only evaluated when the organisation
+    profile declares IPv6 is required.
+  applicability:
+    requires_evidence: [running_config]
+    condition: "ipv6_required == true"
+  evidence:
+    - {key: rights, command: show rights}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: ra_guard_applied}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: ra_guard_applied}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; user-role <name> ; access-list session ra-guard   (apply to every wireless user role on an IPv6 network)"
+  references:
+    - {guide_section: "Non-Global Firewall Settings - RA Guard", page: 56, document: controller_2023}

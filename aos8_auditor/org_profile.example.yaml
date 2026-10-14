@@ -1,0 +1,21 @@
+# Operator-declared deployment intent. Conditional controls read these flags so
+# the auditor never guesses intent (an unknown flag -> the control goes 'manual',
+# never a false fail). Copy to org_profile.yaml and edit for your site, then pass
+# with: aos8-audit ... --org-profile org_profile.yaml
+#
+# Selects the profile overlay unless overridden by --profile.
+deployment_profile: high_security   # baseline | high_security | fips
+
+# Intent flags consumed by control `condition` gates:
+fips_required: true                 # FIPS mode mandated for this deployment
+stp_required: false                 # is Spanning Tree intentionally used?
+ipv6_required: false                # are IPv6 clients/services in use?
+ha_required: true                   # is controller redundancy (VRRP) required?
+wip_required: true                  # is Wireless Intrusion Protection required?
+machine_auth_required: false        # is 802.1X machine authentication mandated?
+require_external_only_auth: false   # must local management auth be disabled?
+require_cert_auth: false            # must WebUI client-certificate auth be enforced?
+
+# Free-form context (recorded, used by later phases):
+controller_fqdn: "wlc1.example.gov"
+expected_admin_networks: ["10.10.100.0/24"]

@@ -1,0 +1,85 @@
+# Open-port exposure controls from the ArubaOS 8 Controller Hardening Guide
+# (rev 10, January 2023): "Controller Open Ports" p.9-14 and the control-plane
+# firewall example rules in "Aruba Core Protocols & Ports" p.30-53.
+#
+# Only the two ports the guide gives an explicit CONFIGURATION remedy for are
+# scored here. The other 41 documented ports are reference data
+# (data/open_ports.yaml, rendered as the report's open-port section) because
+# their remedy is an upstream firewall rule the auditor cannot see -- scoring
+# them would invent failures for a network device this tool never looks at.
+#
+# Telnet on TCP/23 is deliberately NOT duplicated here: it is already scored by
+# AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001.
+
+- id: AOS8-PORTS-DNS-RESPONDER-001
+  title: DNS responder disabled (no ip domain lookup)
+  category: network
+  severity: low
+  description: >-
+    UDP/53 on the controller is not a DNS server: the responder answers EVERY
+    query with the controller's own address, a convenience for APs booting on
+    isolated networks with no DNS. Because it answers everything, vulnerability
+    scanners routinely flag it for DNS cache snooping and traffic amplification -
+    which the guide calls a false positive, since there is no cache and no
+    upstream resolver behind it. The real reason to turn it off is that it is an
+    unauthenticated UDP service answering arbitrary sources. The guide's remedy is
+    'no ip domain lookup'; the port itself may also be blocked upstream "without
+    any loss in service". Reported as WARN, not fail - APs that rely on the
+    responder to find the controller will stop booting, and the change requires a
+    controller restart to take effect.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: dns_responder_enabled}
+        then: manual
+      - when: {source: fact, predicate: fact_false, arg: dns_responder_enabled}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; no ip domain lookup   -- REQUIRES A CONTROLLER RESTART to take effect. Confirm no APs depend on the responder to resolve the controller (APs on isolated networks with no DHCP option 43 / DNS server), and that no admin workflow resolves names on the controller."
+  references:
+    - {guide_section: "Controller Open Ports - 53 (UDP)", page: 9, document: controller_2023}
+    - {guide_section: "Common False Positives - DNS/Nameserver", page: 16, document: controller_2023}
+
+- id: AOS8-PORTS-CAPTIVE-PORTAL-001
+  title: Captive-portal ports denied in the control plane when captive portal is unused
+  category: firewall
+  severity: low
+  description: >-
+    TCP/8080, 8081 and 8088 serve captive-portal pages and are open even on a
+    controller with no captive portal configured. Scanners report meta-refresh XSS
+    and HTTP CONNECT findings against them, which the guide lists as false
+    positives - but the ports are still reachable, unauthenticated web listeners.
+    Where captive portal is not in use the guide's own example control-plane rules
+    close them ('ipv4 deny any proto 6 ports 8080 8083' and '... ports 8088 8088'),
+    which is a change on the controller itself rather than upstream, so it is
+    checkable. Not applicable when a user role actually applies a captive-portal
+    profile. Reported as WARN because an unnoticed captive-portal dependency
+    (guest onboarding, a redirect from an external portal) breaks when the ports
+    close.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: firewall_cp, command: show firewall-cp}
+    - {key: rights, command: show rights}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: captive_portal_in_use}
+        then: not_applicable
+      - when: {source: fact, predicate: fact_true, arg: cp_denies_captive_portal}
+        then: pass
+      - when: {source: fact, predicate: fact_unknown, arg: cp_denies_captive_portal}
+        then: manual
+      - when: {source: fact, predicate: fact_unknown, arg: captive_portal_in_use}
+        then: manual
+      - else: warn
+  remediation_hint: "configure terminal ; firewall cp ; ipv4 deny any proto 6 ports 8080 8083 ; ipv4 deny any proto 6 ports 8088 8088   -- only when captive portal is genuinely unused. Control-plane rules are evaluated in order; add these after the permits your management access depends on."
+  references:
+    - {guide_section: "Aruba Core Protocols & Ports - Captive Portal", page: 33, document: controller_2023}
+    - {guide_section: "Controller Open Ports - 8080/8081/8088 (TCP)", page: 12, document: controller_2023}
+    - {guide_section: "Common False Positives - Web server", page: 17, document: controller_2023}

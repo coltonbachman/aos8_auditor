@@ -1,0 +1,267 @@
+# Workaround families for the AOS 8 advisory (PSIRT) corpus.
+#
+# Each family clusters CVEs that share one mitigation *intent* (the source has
+# ~36 distinct workaround phrasings for the same handful of actions). A CVE is
+# claimed by a family when its workaround text contains ANY of `match` (a
+# case-insensitive substring) AND none of `exclude`. `match` is deliberately
+# port- and interface-specific so a CVE whose workaround is "block UDP/8444" is
+# NEVER counted under the UDP/8211 family, etc. `exclude` vetoes a match where an
+# advisory's generic boilerplate (e.g. a blanket "block UDP/8211" sentence) is
+# explicitly scoped to OTHER CVEs in the same advisory. CVEs claimed by no config
+# family fall through to a generated patch-only advisory control.
+#
+# `logic` detects whether the workaround is APPLIED on this device. Detection
+# rules:
+#   * Anchor feature tokens to a config line start and reject the negated form so
+#     an explicit "no <feature>" / disabled state is never read as PASS.
+#   * For a numbered port, require it next to its protocol ("udp 8211") so a stray
+#     VLAN id / timer / octet equal to the number cannot false-pass; and grant
+#     only WARN (verify the rule actually restricts the port), never PASS, since
+#     read-only config cannot prove a firewall scopes the port to trusted peers.
+#   * Where the exact AOS-8 config syntax is uncertain or unreadable read-only, a
+#     family is left without logic -> it resolves to MANUAL rather than guessing.
+# Counts/years/severity in the report are computed from the CSV, not asserted here.
+
+- id: ADV-MGMT-RESTRICT
+  title: Restrict management-plane access (CLI + WebUI) to authorized networks
+  category: advisory
+  severity: high
+  config_workaround: true
+  match:
+    - "management interfaces be restricted to a dedicated"
+    - "restricting management interfaces to a dedicated"
+    - "cli and web-based management interfaces be restricted to a"
+    - "web-based management interfaces be restricted to a dedicated"
+    - "web-based management interface be restricted to a dedicated"
+    - "block access to the arubaos command line interface"
+    - "block access to the arubaos command line"
+    - "block access to the arubaos web"
+    - "block access to the arubaos web-based management interface"
+  evidence:
+    - {key: running_config, command: show running-config}
+    - {key: netdestination, command: show netdestination}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: admin_policy_applied}
+        then: pass
+      - when: {source: fact, predicate: fact_true, arg: admin_policy_defined}
+        then: warn
+      - else: fail
+  remediation_hint: "Restrict CLI/WebUI to a dedicated management VLAN and apply an admin-only session ACL to the controller port (see AOS8-ADMIN-POLICY-001/002)."
+
+- id: ADV-CPSEC
+  title: Enable Control-Plane Security (CPSec) to protect AP<->controller communication
+  category: advisory
+  severity: high
+  config_workaround: true
+  match:
+    - "enable cpsec"
+    - "communication between controller/gateways and access-point"
+    - "cpsec can mitigate"
+    - "cpsec is already enforced"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # 'cpsec-enable' is the actual enable directive; the 'control-plane-security'
+      # PROFILE header appears in running-config even when CPSec is OFF, so we do
+      # NOT key off the header. The anchor also rejects 'no cpsec-enable'.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*cpsec-enable\\b"}
+        then: pass
+      # Not detected: CPSec may be off, OR the operator may have used the
+      # alternative (a dedicated AP<->controller L2 segment / L3 firewall policy)
+      # which is not reliably readable read-only -> WARN, not FAIL.
+      - else: warn
+  remediation_hint: "Enable control-plane security (CPSec) so AP<->controller PAPI is authenticated/encrypted ('control-plane-security' profile with 'cpsec-enable'), or otherwise restrict AP<->controller communication to a dedicated L2 segment/VLAN (or an L3 firewall policy) per the advisory."
+
+- id: ADV-PAPI-8211
+  title: Restrict PAPI (UDP/8211) to trusted devices (APs / peer controllers)
+  category: advisory
+  severity: high
+  config_workaround: true
+  match:
+    - "udp/8211"
+    - "port udp/8211"
+    - "8211"
+  # The 2023-002 advisory carries a blanket "block UDP/8211" sentence on CVEs whose
+  # OWN workaround is "we have no available workaround for the PAPI vulnerabilities"
+  # (authenticated CLI RCE / stored XSS mitigated by AP<->controller segmentation,
+  # not by closing 8211). Exclude those so this family claims only genuine PAPI/8211
+  # cases — telling an operator "close 8211" for a CLI-RCE would be wrong.
+  exclude:
+    - "for mitigating the papi related vulnerabilities, we have no available workaround"
+  evidence:
+    - {key: running_config, command: show running-config}
+    - {key: ip_access_list, command: show ip access-list brief}
+  logic:
+    type: first_match
+    clauses:
+      # CPSec authenticates/encrypts AP<->controller PAPI (UDP/8211) -> reliable PASS.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*cpsec-enable\\b"}
+        then: pass
+      # A firewall/session rule that references UDP 8211 exists -> the port is being
+      # handled, but read-only config can't prove it permits ONLY APs/peers -> WARN.
+      - when: {source: running_config, predicate: regex, arg: "(?im)\\budp\\s+8211\\b"}
+        then: warn
+      - else: fail
+  remediation_hint: "Block UDP/8211 (PAPI) from untrusted networks (permit only APs/peer controllers), or enable CPSec. Patches should still be applied."
+
+- id: ADV-PAPI-8444
+  title: Restrict the control/management channel UDP/8444 to trusted infrastructure
+  category: advisory
+  severity: high
+  config_workaround: true
+  match:
+    - "udp port 8444"
+    - "8444"
+  evidence:
+    - {key: running_config, command: show running-config}
+    - {key: ip_access_list, command: show ip access-list brief}
+  logic:
+    type: first_match
+    clauses:
+      # NOTE: CPSec is NOT a workaround for any UDP/8444 CVE (the source mitigation
+      # is a management-VLAN restriction + an L3 firewall limiting UDP/8444), so we
+      # do NOT pass on cpsec here. A rule referencing UDP 8444 -> WARN (verify it
+      # limits the port to trusted infrastructure); otherwise FAIL. The companion
+      # management-VLAN half of this workaround is tracked by ADV-MGMT-RESTRICT.
+      - when: {source: running_config, predicate: regex, arg: "(?im)\\budp\\s+8444\\b"}
+        then: warn
+      - else: fail
+  remediation_hint: "Restrict management interfaces to a dedicated VLAN AND configure an L3 firewall policy limiting UDP/8444 to trusted infrastructure (managed APs and peer controllers) only."
+
+- id: ADV-ENHANCED-PAPI
+  title: Enable Enhanced PAPI Security with a non-default key
+  category: advisory
+  severity: high
+  config_workaround: true
+  match:
+    - "enhanced papi security"
+  evidence:
+    - {key: running_config, command: show running-config}
+  # Exact AOS config syntax for Enhanced PAPI Security is not reliably detectable
+  # read-only -> verify manually rather than guess a regex.
+  remediation_hint: "Enable the Enhanced PAPI Security feature using a NON-default key (contact HPE Aruba Networking support for configuration assistance)."
+
+- id: ADV-RADIUS-RADSEC
+  title: Protect RADIUS with RadSec / EAP-TLS (RADIUS forgery)
+  category: advisory
+  severity: medium
+  config_workaround: true
+  match:
+    - "radsec"
+    - "eap-tls (assuming message-authenticator"
+  evidence:
+    - {key: running_config, command: show running-config}
+    - {key: aaa_auth_servers, command: show aaa authentication-server all}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)\\bradsec\\b"}
+        then: pass
+      # The EAP-TLS + Message-Authenticator alternative (where the advisory allows
+      # it) is negotiated off-box and is not reliably readable on the controller, so
+      # absence of 'radsec' is WARN (verify the RADIUS transport), not a hard fail.
+      - else: warn
+  remediation_hint: "Use RadSec (RADIUS over TLS) or, where the advisory permits, EAP-TLS with a properly configured Message-Authenticator; isolate cleartext RADIUS to trusted segments/VPN."
+
+- id: ADV-WIFI-GROUPFRAMEBLOCK
+  title: Enable group-frame-block on Passpoint SSIDs (GTK manipulation)
+  category: advisory
+  severity: medium
+  config_workaround: true
+  match:
+    - "group-frame-block"
+  evidence:
+    - {key: wlan_ssid_profile, command: show wlan ssid-profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # Anchored + negated-form rejected: 'no group-frame-block' must NOT read as applied.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*(?!no\\s)group-frame-block\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "On Passpoint SSIDs enable 'group-frame-block'. (No workaround for open/captive-portal SSIDs.)"
+
+- id: ADV-WIFI-MFP
+  title: Enable Management Frame Protection (802.11w) / denylist-sco-attack (inter-BSSID isolation bypass)
+  category: advisory
+  severity: medium
+  config_workaround: true
+  match:
+    - "management frame protection (mfp, 802.11w)"
+    - "denylist-sco"
+  evidence:
+    - {key: wlan_ssid_profile, command: show wlan ssid-profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # Anchored + negated-form rejected so 'no mfp-capable' / 'no denylist-sco-attack'
+      # do not read as applied. Detection uses the AOS-8 controller form
+      # 'denylist-sco-attack' (AAA profile); the bare 'denylist-sco' SSID-profile knob
+      # is the AOS-10.x/Instant form and is intentionally NOT a pass signal here.
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*(?!no\\s)(mfp-capable|mfp-required|dot11w|management-frame-protection|denylist-sco-attack)\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "Enable MFP (802.11w) for WPA2 SSIDs (mandatory under WPA3). For 802.1X SSIDs on an AOS-8 controller/Campus AP, enable 'denylist-sco-attack' in the AAA profile (the bare 'denylist-sco' SSID-profile knob is the AOS-10.x / Instant-AOS-8.x form). Enable both the same-AP (MFP) and different-AP (denylist) controls per the advisory."
+
+- id: ADV-WIFI-BCASTARP
+  title: Keep broadcast-filter ARP enabled (cross-BSSID GTK re-encryption)
+  category: advisory
+  severity: medium
+  config_workaround: true
+  match:
+    - "broadcast-filter arp"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      # broadcast-filter ARP is ON by default in AOS-8.x. The vulnerable state is an
+      # EXPLICIT disable, so warn only when 'no broadcast-filter arp' is present;
+      # otherwise (default-on or explicitly enabled) the workaround holds -> PASS.
+      - when: {source: running_config, predicate: no_form_present, arg: "broadcast-filter arp"}
+        then: warn
+      - else: pass
+  remediation_hint: "Ensure 'broadcast-filter ARP' has NOT been disabled (it is the AOS-8.x default); if a 'no broadcast-filter arp' line is present, remove it."
+
+- id: ADV-WIFI-ENFORCEDHCP
+  title: Enable enforce-DHCP (gateway-bounce / L2-L3 manipulation)
+  category: advisory
+  severity: medium
+  config_workaround: true
+  match:
+    - "enforce-dhcp"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*(?!no\\s)enforce-dhcp\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "Enable 'enforce-DHCP' so clients accept network configuration only from authorized DHCP exchanges."
+
+- id: ADV-PHYSICAL
+  title: Restrict physical access to the controller (physical-access-only vulns)
+  category: advisory
+  severity: manual
+  config_workaround: false
+  match:
+    - "only authorized personnel have physical access"
+  evidence: []
+  remediation_hint: "Ensure only authorized personnel have physical access to the affected devices (no software workaround)."
+
+- id: ADV-AAA-USER-DELETE
+  title: Delete stale users (insufficient session invalidation on deactivation)
+  category: advisory
+  severity: manual
+  config_workaround: false
+  match:
+    - "aaa user delete"
+  evidence: []
+  remediation_hint: "On deactivating an account, invalidate the session with 'aaa user delete <user>'. (Operational action — not a persistent config state.)"

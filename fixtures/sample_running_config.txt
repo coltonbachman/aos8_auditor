@@ -1,0 +1,67 @@
+version 8.6.0.4
+hostname "JITC7240"
+clock timezone PST -8
+!
+banner motd ^
+You are accessing a U.S. Government information system. Community oversight and
+monitoring of this password-protected system applies. Unauthorized use prohibited.
+^
+!
+snmp-server community publicCommunityStr
+snmp-server enable trap
+snmp-server engine-id 00:11:22:33:44:55
+snmp-server user aossnmpadmin auth-prot sha S3cretAuthPass99 priv-prot AES S3cretPrivPass00
+snmp-server host 10.10.100.101 version 3 aossnmpadmin
+!
+ntp authenticate
+ntp authentication-key 1 md5 myNtpSecretKey123
+ntp trusted-key 1
+ntp server 10.10.100.5 key 1
+!
+aaa password-policy mgmt
+   enable
+   password-min-length 15
+   password-min-special-character 2
+!
+aaa authentication-server radius RAD1
+   host 10.10.100.50
+   key R@diusSh4redKeyValue99
+   enable
+!
+aaa authentication-server ldap LDAP1
+   host 10.10.100.60
+   admin-dn cn=svc-bind,dc=example,dc=gov
+   admin-passwd Ld@pBindP4ssword
+   authport 636
+   base-dn dc=example,dc=gov
+   enable
+!
+mgmt-user admin root a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+mgmt-user webui-cacert MyTrustedCA serial 1A2B3C4D operatoraccount read-only
+!
+wlan ssid-profile CORP
+   essid CORP
+   opmode wpa2-aes
+   wpa-passphrase Sup3rSecret Passphrase With Spaces
+!
+ap system-profile "default"
+   ap-console-password fd6ec6dee2395c7af2d96a012c8e8fdf576c7fd601deda67
+   bkup-passwords 4870d95db6832dee31940aaffac4c4337f3db3f20c7a39e3
+!
+vrrp 10
+   description "Campus-VRRP"
+   authentication aruba123secret
+   ip address 10.10.100.254
+   vlan 100
+   no shutdown
+!
+interface gigabitethernet 0/0/0
+   trusted
+!
+crypto-local isakmp key MyIkePreSharedKey address 10.10.100.9
+!
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA0Z3VS5JJTopSecretKeyMaterialMustNeverLeakABCDEFGH
+abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ12
+ZZZZprivatekeybytescontinuehereANDshouldbecompletelyredacted0000
+-----END RSA PRIVATE KEY-----

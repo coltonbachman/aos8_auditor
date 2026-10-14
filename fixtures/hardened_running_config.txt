@@ -1,0 +1,120 @@
+version 8.6.0.4
+hostname "JITC7240"
+country US
+clock timezone PST -8
+fips enable
+no spanning-tree
+vlan 10
+vlan 100
+vlan 200
+controller-ip vlan 10
+ip default-gateway 10.10.100.1
+no ip domain lookup
+interface vlan 10
+  ip address 10.10.100.254 255.255.255.0
+loginsession timeout 5
+banner motd ^
+Authorized use only. This system is monitored.
+^
+ssh mgmt-auth public-key
+ssh disable-ciphers aes-cbc
+ssh disable-mac hmac-sha1-96
+mgmt-user console-block
+logging 10.10.100.200
+ntp authenticate
+ntp authentication-key 1 md5 [REDACTED:ntp-key]
+ntp trusted-key 1
+ntp server 10.10.100.5 key 1
+snmp-server enable trap
+snmp-server engine-id 00:11:22:33:44:55
+snmp-server user aossnmpadmin auth-prot sha [REDACTED:snmp-auth] priv-prot AES [REDACTED:snmp-priv]
+snmp-server host 10.10.100.101 version 3 aossnmpadmin
+web-server profile
+  session-timeout 360
+  mgmt-auth certificate
+  switch-cert JITC-Site-Cert
+  ciphers high
+  ssl-protocol tlsv1.2
+firewall
+  prohibit-ip-spoofing
+  prohibit-arp-spoofing
+  deny-inter-user-traffic
+  local-valid-users
+  attack-rate cp 20
+  cp-bandwidth-contract untrusted-ucast 20
+  cp-bandwidth-contract untrusted-mcast 4
+  cp-bandwidth-contract trusted-ucast 160
+  cp-bandwidth-contract trusted-mcast 4
+crypto isakmp policy 20
+  version v2
+  encryption AES256
+  hash sha
+  group 14
+  authentication rsa-sig
+ap system-profile "default"
+  ap-console-protection
+aaa password-policy mgmt
+  enable
+  password-min-length 15
+  password-min-special-character 2
+aaa authentication-server radius RAD1
+  host 10.10.100.50
+  key [REDACTED:shared-key]
+  authport 1812
+  acctport 1813
+  enable
+aaa server-group RAD-GRP
+  auth-server RAD1
+aaa authentication dot1x default
+aaa authentication mgmt
+  enable
+  mschapv2
+  server-group RAD-GRP
+aaa profile CORP-AAA
+  authentication-dot1x default
+  dot1x-default-role authenticated
+  dot1x-server-group RAD-GRP
+  enforce-dhcp
+  blacklist
+  blacklist-time 3600
+wlan ssid-profile CORP
+  essid CORP
+  opmode wpa2-aes
+  hide-ssid
+  deny-bcast
+wlan virtual-ap CORP-VAP
+  ssid-profile CORP
+  aaa-profile CORP-AAA
+  vlan 100
+  forward-mode tunnel
+netdestination AOS-Admin-Workstations
+  host 10.10.100.10 position 1
+ip access-list session AOS-Admin-Only-Policy
+  user any udp 68 69 deny
+  alias AOS-Admin-Workstations alias AOS-Controllers tcp 4343 4343 permit
+  alias AOS-Admin-Workstations alias AOS-Controllers svc-ssh permit
+ids general-profile "default"
+wms-local system
+  wired-containment true
+  rogue-containment true
+  detect-ap-spoofing true
+interface gigabitethernet 0/0/2
+  ip access-group AOS-Admin-Only-Policy session
+interface vlan 1
+  no ip address
+  no operstate up
+  shutdown
+vrrp 10
+  ip address 10.10.100.254
+  authentication [REDACTED:vrrp-auth]
+  vlan 100
+  no shutdown
+rf dot11a-radio-profile AM-Only
+  mode am-mode
+rf dot11g-radio-profile AM-Only
+  mode am-mode
+ap-group AOS-AM-Group
+  dot11a-radio-profile AM-Only
+  dot11g-radio-profile AM-Only
+lcd-menu
+  disable menu

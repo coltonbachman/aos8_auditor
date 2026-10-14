@@ -1,0 +1,164 @@
+# Wireless Intrusion (WIP) extended controls:
+#   - WIP/WIDS configured centrally on the master
+#   - WIP features that do NOT require an RFProtect license (rogue/wired containment,
+#     non-rule rogue classification, wireless containment without Tarpit)
+#   - RFProtect-gated features (AP classification rules, Tarpit wireless containment)
+#   - Client blacklist usage and persistence
+# Avoids duplicating AOS8-WIP-LIC-001 (license present), AOS8-WIP-AM-001 (AM group),
+# and AOS8-WIP-DASHBOARD-001 (point-in-time rogue/blacklist review).
+
+- id: AOS8-WIP-MASTER-001
+  title: WIP / IDS configuration present (managed centrally on the master)
+  category: wip
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ids\\s+(general|wms|profile|ap-rule|unauthorized-device|impersonation|dos|signature)"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*wms-local\\s+system"}
+        then: pass
+      - else: fail
+  remediation_hint: "On the master controller (or MM config node), bind an ids-profile and wms general/local profile so WIP applies network-wide."
+  references: [{guide_section: "Wireless Intrusion Prevention (master configuration)", ref: "4052-4055"}]
+
+- id: AOS8-WIP-ROGUE-DETECT-001
+  title: Rogue AP detection / WMS classification enabled
+  category: wip
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: wms_rogue_ap, command: show wms rogue-ap}
+    - {key: ap_monitor_ap_list, command: show ap monitor ap-list}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*ids\\s+general-profile\\b"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*detect-ap-spoofing\\b|^\\s*detect-adhoc-network\\b|^\\s*detect-unencrypted-valid\\b"}
+        then: pass
+      - else: fail
+  remediation_hint: "Configure an ids general-profile (and unauthorized-device-profile) and bind it so APs/AMs detect and classify rogue vs interfering APs."
+  references: [{guide_section: "Rogue AP Detection and Classification", ref: "4079-4085"}]
+
+- id: AOS8-WIP-CONTAINMENT-001
+  title: Rogue / wired containment enabled (no RFProtect license required)
+  category: wip
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*wired-containment\\s+true\\b"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*rogue-containment\\s+true\\b|^\\s*detect-and-contain\\b"}
+        then: pass
+      - else: warn
+  remediation_hint: "Rogue containment, wired containment, and wireless containment-without-Tarpit need no RFProtect license; enable them in the unauthorized-device / general IDS profile."
+  references: [{guide_section: "WIP features not requiring an RFProtect license", ref: "4061-4077"}]
+
+- id: AOS8-WIP-TARPIT-LIC-001
+  title: Tarpit wireless containment requires RFProtect license
+  category: wip
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex_absent, arg: "(?im)^\\s*(?:wireless-)?containment\\s+tarpit\\b"}
+        then: not_applicable
+      - when: {source: fact, predicate: fact_unknown, arg: rfprotect_licensed}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: rfprotect_licensed}
+        then: pass
+      - else: fail
+  remediation_hint: "Tarpit-based wireless containment requires RFProtect; either install RFProtect or switch to non-Tarpit wireless/wired containment."
+  references: [{guide_section: "WIP features not requiring an RFProtect license (Tarpit caveat)", ref: "4061-4077"}]
+
+- id: AOS8-WIP-CLASSRULES-LIC-001
+  title: AP classification rules require RFProtect license
+  category: wip
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex_absent, arg: "(?im)^\\s*ids\\s+ap-(classification-)?rule\\b|^\\s*rap-rule\\b"}
+        then: not_applicable
+      - when: {source: fact, predicate: fact_unknown, arg: rfprotect_licensed}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: rfprotect_licensed}
+        then: pass
+      - else: fail
+  remediation_hint: "AP classification rules (rule-based rogue classification) require RFProtect; install the license or rely on non-rule classification methods."
+  references: [{guide_section: "WIP features not requiring an RFProtect license (classification-rule caveat)", ref: "4061-4077"}]
+
+- id: AOS8-WIP-BLACKLIST-ENABLE-001
+  title: Client blacklisting enabled in the AAA / virtual-AP profile
+  category: wip
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*blacklist\\s*$"}
+        then: pass
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*(dos-prevention|stateful-blacklist)\\b"}
+        then: pass
+      - else: fail
+  remediation_hint: "Enable client blacklisting in the AAA profile (blacklist) so detected/attacking clients are deauthenticated and barred from all SSIDs."
+  references: [{guide_section: "Client Blacklisting", ref: "4099-4105"}]
+
+- id: AOS8-WIP-BLACKLIST-TIME-001
+  title: Client blacklist duration explicitly configured
+  category: wip
+  severity: low
+  applicability:
+    requires_evidence: [running_config]
+    condition: "wip_required == true"
+  evidence:
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)blacklist-time\\s+\\d+"}
+        then: pass
+      - else: warn
+  remediation_hint: "Set the blacklist duration (e.g. in the virtual-ap or dot1x-auth-server profile) so blacklisted clients are barred for an intentional, non-trivial time."
+  references: [{guide_section: "Client Blacklisting (specified amount of time)", ref: "4099-4105"}]
+
+- id: AOS8-WIP-BLACKLIST-PERSIST-001
+  title: Client blacklist persistence across reboot and user-DB export/import
+  category: wip
+  severity: manual
+  applicability:
+    requires_evidence: [blacklist_clients]
+  evidence:
+    - {key: blacklist_clients, command: show ap blacklist-clients}
+    - {key: running_config, command: show running-config}
+  remediation_hint: "Confirm the blacklist persists across reboot (stored in the user database) and travels with user-database export/import; not verifiable from a single read-only snapshot."
+  references: [{guide_section: "Client Blacklisting (persistence / user-database export-import)", ref: "4099-4105"}]

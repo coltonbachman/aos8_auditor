@@ -1,0 +1,172 @@
+# Global high-security baseline controls.
+- id: AOS8-GLOBAL-FIPS-001
+  title: FIPS mode enabled
+  category: global
+  severity: critical
+  applicability:
+    profiles: [high_security, fips]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_fips, command: show fips}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: fips_enabled}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: fips_enabled}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; fips enable ; write memory ; reload"
+  references: [{guide_section: "High Security Environment", ref: "1175-1232"}]
+
+- id: AOS8-GLOBAL-STP-001
+  title: Spanning Tree disabled when not in use
+  category: global
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "stp_required == false"
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: spanning_tree_disabled}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; no spanning-tree ; write memory"
+  references: [{guide_section: "Disable Spanning Tree", ref: "1234-1273"}]
+
+- id: AOS8-GLOBAL-BANNER-001
+  title: Login / MOTD banner configured
+  category: global
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_banner, command: show banner}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: banner_present}
+        then: pass
+      - else: fail
+  remediation_hint: >-
+    configure terminal ; banner motd <delim> -- the delimiter is one character on a
+    line of its own; the approved text goes on the lines after it, and the same
+    character alone on a line ends the banner. The one-line form is rejected.
+  references: [{guide_section: "Configuring Banner", ref: "1330-1410"}]
+
+- id: AOS8-GLOBAL-TIMEOUT-001
+  title: CLI session inactivity timeout set and not disabled
+  category: global
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: loginsession_timeout, command: show loginsession timeout}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: cli_timeout_seconds}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: cli_timeout_disabled}
+        then: fail
+      - else: pass
+  remediation_hint: "configure terminal ; loginsession timeout 5"
+  references: [{guide_section: "Configuring Inactivity Timeout", ref: "1423-1454"}]
+
+- id: AOS8-GLOBAL-TIMEOUT-002
+  title: WebUI session inactivity timeout set
+  category: global
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_present, arg: webui_session_timeout}
+        then: pass
+      - else: fail
+  remediation_hint: "web-server profile ; session-timeout 360"
+  references: [{guide_section: "Setting a WebUI Session Timeout", ref: "1458-1498"}]
+
+- id: AOS8-GLOBAL-SNMP-001
+  title: No SNMPv1/v2c community strings (SNMPv3 only)
+  category: global
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: snmp, command: show snmp}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: snmp_v1v2c_present}
+        then: fail
+      - else: pass
+  remediation_hint: "Remove 'snmp-server community ...'; configure SNMPv3 user with SHA/AES."
+  references: [{guide_section: "Configuring SNMP", ref: "1502-1565"}]
+
+- id: AOS8-GLOBAL-SYSLOG-001
+  title: External syslog server configured
+  category: global
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence: [{key: running_config, command: show running-config}]
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_gte, arg: {path: syslog_server_count, value: 1}}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; logging <syslog-server-ip>"
+  references: [{guide_section: "Configuring Logging", ref: "1568-1631"}]
+
+- id: AOS8-GLOBAL-NTP-001
+  title: NTP configured with authentication
+  category: global
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ntp_servers, command: show ntp servers}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_equals, arg: {path: ntp_server_count, value: 0}}
+        then: fail
+      - when: {source: fact, predicate: fact_true, arg: ntp_authenticated}
+        then: pass
+      - else: warn
+  remediation_hint: "ntp server <ip> key <id> ; ntp authenticate ; ntp authentication-key <id> md5 <secret> ; ntp trusted-key <id>"
+  references: [{guide_section: "Configuring NTP and NTP Authentication", ref: "1666-1740"}]
+
+- id: AOS8-GLOBAL-LCD-001
+  title: LCD front-panel menu disabled (72xx)
+  category: global
+  severity: medium
+  applicability:
+    platforms: ["7200"]
+    requires_evidence: [running_config]
+  evidence:
+    - {key: lcd_menu, command: show lcd-menu}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: lcd_menu_disabled}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: lcd_menu_disabled}
+        then: pass
+      - else: fail
+  remediation_hint: "lcd-menu ; disable menu"
+  references: [{guide_section: "Disabling the LCD", ref: "1753-1778"}]

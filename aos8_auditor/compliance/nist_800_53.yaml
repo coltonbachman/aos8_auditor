@@ -1,0 +1,131 @@
+name: nist_800_53
+framework: NIST SP 800-53 Rev 5
+version: "Rev 5"
+description: >
+  Crosswalk of ArubaOS 8 WLAN-controller hardening controls to NIST SP 800-53
+  Rev 5 controls. Scopes the wireless-controller configuration slice (AC, IA, SC,
+  AU, CM/SI, and wireless-access controls AC-18 / SC-40) for a federal high-impact
+  WLAN deployment.
+disclaimer: >
+  Advisory crosswalk of the ArubaOS 8 WLAN-controller-configuration slice only.
+  It is NOT a control assessment, ATO, or SCA opinion. A requirement shown MET here
+  is only partially evidenced by the controller; full satisfaction of an 800-53
+  control typically requires additional system, host, process, and policy evidence
+  outside the WLAN controller. Validate with a qualified assessor.
+profile: high_security
+org_profile_defaults:
+  wip_required: true          # SC-40 / SI-4 wireless intrusion detection
+  fips_required: true         # SC-13 FIPS-validated cryptography on a federal system
+requirements:
+  - id: "AC-2"
+    title: Account Management
+    controls: [AOS8-INIT-001, AOS8-AUTH-SERVER-001, AOS8-MGMT-LOCALAUTH-001, 
+          AOS8-AUTH-LOCALDB-DOT1X-001]
+  - id: "AC-3"
+    title: Access Enforcement
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-DEFAULTROLE-001, AOS8-ROLE-STATEFUL-001, 
+          AOS8-ADMIN-POLICY-001, AOS8-ADMIN-POLICY-002, AOS8-ROLE-ORPHAN-POLICY-001]
+  - id: "AC-4"
+    title: Information Flow Enforcement
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-NET-UNTRUSTED-PORT-001, 
+          AOS8-ROLE-NETDEST-MEMBERSHIP-001, AOS8-WLAN-FWDMODE-001, AOS8-WLAN-VLAN-001]
+  - id: "AC-6"
+    title: Least Privilege
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-INITROLE-001, AOS8-ROLE-UDP6869-DENY-001, 
+          AOS8-LIC-PEFV-001]
+  - id: "AC-7"
+    title: Unsuccessful Logon Attempts
+    controls: [AOS8-MGMT-PWDPOL-001]
+  - id: "AC-8"
+    title: System Use Notification (Banner)
+    controls: [AOS8-GLOBAL-BANNER-001]
+  - id: "AC-11"
+    title: Device Lock / Session Termination on Inactivity
+    controls: [AOS8-GLOBAL-TIMEOUT-001, AOS8-GLOBAL-TIMEOUT-002]
+  - id: "AC-12"
+    title: Session Termination
+    controls: [AOS8-GLOBAL-TIMEOUT-001, AOS8-GLOBAL-TIMEOUT-002, AOS8-MGMT-WEBUI-SESSLIMIT-001]
+  - id: "AC-17"
+    title: Remote Access
+    controls: [AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-MGMT-SSH-VERSION-001, 
+          AOS8-MGMT-SSH-PUBKEY-001, AOS8-MGMT-FILETRANSFER-SCP-001]
+  - id: "AC-18"
+    title: Wireless Access
+    controls: [AOS8-WLAN-001, AOS8-DOT1X-001, AOS8-WLAN-FWDMODE-001, AOS8-WLAN-VLAN1-001, 
+          AOS8-WLAN-DEFGROUP-001, AOS8-WLAN-VAPEXCLUDE-001]
+  - id: "IA-2"
+    title: Identification and Authentication (Organizational Users)
+    controls: [AOS8-AUTH-SERVER-001, AOS8-AUTH-SERVERGROUP-001, AOS8-MGMT-LOCALAUTH-001, 
+          AOS8-DOT1X-001, AOS8-WLAN-001]
+  - id: "IA-3"
+    title: Device Identification and Authentication
+    controls: [AOS8-DOT1X-MACHINEAUTH-001, AOS8-ROLE-MACHINEROLES-001, AOS8-AUTH-EAP-TLS-CERTS-001]
+  - id: "IA-5"
+    title: Authenticator Management
+    controls: [AOS8-INIT-001, AOS8-MGMT-PWDPOL-001, AOS8-MGMT-SSH-PUBKEY-001, 
+          AOS8-AUTH-RADIUS-CLIENTREG-001, AOS8-GLOBAL-SNMP-001]
+  - id: "IA-7"
+    title: Cryptographic Module Authentication
+    controls: [AOS8-GLOBAL-FIPS-001, AOS8-MGMT-CERT-001, AOS8-MGMT-CSR-001]
+  - id: "IA-8"
+    title: Identification and Authentication (Non-Organizational Users)
+    controls: [AOS8-AUTH-EAP-TYPE-001, AOS8-AUTH-EAP-TLS-CERTS-001, AOS8-WLAN-SRVDERIVE-001]
+  - id: "AU-3"
+    title: Content of Audit Records
+    controls: [AOS8-GLOBAL-SYSLOG-001]
+  - id: "AU-6"
+    title: Audit Record Review, Analysis, and Reporting
+    controls: [AOS8-WIP-DASHBOARD-001, AOS8-GLOBAL-SYSLOG-001]
+  - id: "AU-8"
+    title: Time Stamps
+    controls: [AOS8-GLOBAL-NTP-001, AOS8-INIT-CLOCK-001, AOS8-INIT-TIMEZONE-001, AOS8-LIC-CLOCK-001]
+  - id: "AU-9"
+    title: Protection of Audit Information
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-MGMT-LOGCOPY-001]
+  - id: "AU-12"
+    title: Audit Record Generation
+    controls: [AOS8-GLOBAL-SYSLOG-001]
+  - id: "CM-6"
+    title: Configuration Settings
+    controls: [AOS8-INIT-002, AOS8-INIT-STARTUP-001, AOS8-INIT-PERSIST-001, AOS8-INIT-NEGATE-001, 
+          AOS8-GLOBAL-LCD-001, AOS8-GLOBAL-STP-001]
+  - id: "CM-7"
+    title: Least Functionality
+    controls: [AOS8-GLOBAL-SNMP-001, AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-NET-PORT-001, 
+          AOS8-NET-IPV6-DISABLED-001, AOS8-NET-DEFAULTVLAN-001, AOS8-WLAN-HIDESSID-001]
+  - id: "CP-9"
+    title: System Backup
+    controls: [AOS8-MGMT-BACKUP-001, AOS8-LIC-BACKUP-001, AOS8-MGMT-LOGCOPY-001]
+  - id: "CP-10"
+    title: System Recovery and Reconstitution
+    controls: [AOS8-MGMT-RESTORE-001, AOS8-NET-VRRP-001, AOS8-NET-VRRP-AUTH-001]
+  - id: "SC-7"
+    title: Boundary Protection
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-NET-UNTRUSTED-PORT-001, 
+          AOS8-NET-CTRLIP-001, AOS8-NET-DEFAULTVLAN-001, AOS8-ROLE-STATEFUL-001]
+  - id: "SC-8"
+    title: Transmission Confidentiality and Integrity
+    controls: [AOS8-WLAN-001, AOS8-WLAN-FWDMODE-001, AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, 
+          AOS8-AUTH-LDAP-LDAPS-001, AOS8-MGMT-FILETRANSFER-SCP-001, AOS8-MGMT-WEBUI-CERTAUTH-001]
+  - id: "SC-12"
+    title: Cryptographic Key Establishment and Management
+    controls: [AOS8-MGMT-CERT-001, AOS8-MGMT-CSR-001, AOS8-MGMT-CERT-IMPORT-001, 
+          AOS8-MGMT-TRUSTEDCA-001, AOS8-AUTH-EAP-TLS-CERTS-001]
+  - id: "SC-13"
+    title: Cryptographic Protection (FIPS-Validated)
+    controls: [AOS8-GLOBAL-FIPS-001, AOS8-MGMT-SSH-VERSION-001, AOS8-WLAN-001, AOS8-MGMT-CSR-001]
+  - id: "SC-40"
+    title: Wireless Link Protection
+    controls: [AOS8-WIP-LIC-001, AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-CONTAINMENT-001, 
+          AOS8-WIP-CLASSRULES-LIC-001, AOS8-WIP-AM-001, AOS8-WIP-TARPIT-LIC-001]
+  - id: "SI-4"
+    title: System Monitoring (incl. Wireless Intrusion Detection)
+    controls: [AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-MASTER-001, AOS8-WIP-DASHBOARD-001, 
+          AOS8-WIP-BLACKLIST-ENABLE-001, AOS8-WIP-AM-001]
+  - id: "PE-3"
+    title: Physical Access Control
+    controls: [AOS8-PHYS-INSTALL-001, AOS8-PHYS-CONSOLE-001, AOS8-PHYS-MOUNT-001, AOS8-PHYS-CO-001]
+  - id: "SR-9"
+    title: Tamper Resistance and Detection
+    controls: [AOS8-PHYS-RECEIVE-001, AOS8-PHYS-TEL-001, AOS8-PHYS-TELLID-001, AOS8-PHYS-TELPORT-001,
+      AOS8-PHYS-TELLOG-001, AOS8-PHYS-TELREAD-001]

@@ -1,0 +1,7 @@
+name: fips
+extends: high_security
+# FIPS is a strict superset of high_security and adds the physical/TEL controls
+# (gated to the fips profile). FIPS-mode-off is already critical at the base.
+verdict_overrides:
+  AOS8-ADMIN-POLICY-001: {warn: fail}
+severity_overrides: {}

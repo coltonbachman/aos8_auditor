@@ -1,0 +1,111 @@
+name: pci_dss
+framework: PCI DSS
+version: "4.0"
+description: >
+  Advisory crosswalk of the ArubaOS 8 WLAN-controller hardening controls to PCI DSS v4.0
+  requirements for wireless infrastructure attached to, or in scope of, a cardholder-data
+  environment (CDE). Covers the controller-config slice of Req 1 (segmentation), 2 (defaults/
+  config), 4 (transmission crypto, incl. 4.2.1 wireless), 8 (auth), 10 (logging/NTP), and 11.2
+  (wireless rogue detection).
+disclaimer: >
+  This is an ADVISORY crosswalk of the ArubaOS 8 WLAN-controller-configuration slice ONLY. It is
+  NOT a PCI DSS certification, a QSA/ISA opinion, nor a completed SAQ/RoC. A requirement shown MET
+  here is evidenced only by controller configuration; most PCI requirements also need non-WLAN
+  evidence (network/host/firewall config, SIEM/log-review process, key-management, physical and
+  organizational controls) before they can be considered satisfied. Validate all findings with a
+  qualified assessor.
+profile: high_security
+org_profile_defaults:
+  wip_required: true          # PCI 11.2 requires wireless IDS/rogue detection in/around the CDE
+  fips_required: false        # set true only for FIPS-validated deployments
+requirements:
+  # ---- Requirement 1: Install and maintain network security controls (segmentation) ----
+  - id: "1.2.5"
+    title: All services, protocols, and ports allowed are identified, approved, and necessary
+    controls: [AOS8-NET-PORT-001, AOS8-NET-PORTMODE-001, AOS8-NET-IPV6-DISABLED-001, 
+          AOS8-NET-UNTRUSTED-PORT-001]
+  - id: "1.2.6"
+    title: Security features defined for insecure services, protocols, and ports in use
+    controls: [AOS8-GLOBAL-SNMP-001, AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, 
+          AOS8-MGMT-SSH-VERSION-001, AOS8-MGMT-FILETRANSFER-SCP-001]
+  - id: "1.3.1"
+    title: Inbound traffic to the CDE restricted to that which is necessary
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-NET-DEFAULTVLAN-001, 
+          AOS8-WLAN-VLAN1-001, AOS8-WLAN-VLAN-001]
+  - id: "1.3.2"
+    title: Outbound traffic from the CDE restricted to that which is necessary
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-STATEFUL-001, AOS8-ROLE-NETDEST-MEMBERSHIP-001, 
+          AOS8-ROLE-ORPHAN-POLICY-001]
+  - id: "1.4.1"
+    title: NSCs implemented between trusted and untrusted networks
+    controls: [AOS8-NET-UNTRUSTED-PORT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-ADMIN-POLICY-001, 
+          AOS8-ADMIN-POLICY-002]
+  # ---- Requirement 2: Apply secure configurations / change defaults ----
+  - id: "2.2.1"
+    title: Configuration standards developed, implemented, and maintained
+    controls: [AOS8-INIT-STARTUP-001, AOS8-INIT-PERSIST-001, AOS8-INIT-ROLE-001, 
+          AOS8-INIT-NEGATE-001]
+  - id: "2.2.2"
+    title: Vendor default accounts removed or default passwords changed
+    controls: [AOS8-INIT-001, AOS8-INIT-002, AOS8-MGMT-CERT-001, AOS8-NET-MGMTIF-001]
+  - id: "2.2.4"
+    title: Only necessary services, protocols, daemons, and functions enabled
+    controls: [AOS8-GLOBAL-SNMP-001, AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, 
+          AOS8-MGMT-SSH-VERSION-001, AOS8-NET-PORT-001, AOS8-GLOBAL-LCD-001, AOS8-GLOBAL-STP-001]
+  - id: "2.2.7"
+    title: All non-console administrative access encrypted using strong cryptography
+    controls: [AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-MGMT-SSH-PUBKEY-001, 
+          AOS8-MGMT-WEBUI-CERTAUTH-001, AOS8-MGMT-CERT-001, AOS8-GLOBAL-FIPS-001, 
+          AOS8-MGMT-SSH-VERSION-001]
+  - id: "2.3.1"
+    title: Wireless vendor defaults changed or confirmed secure at installation
+    controls: [AOS8-WLAN-001, AOS8-WLAN-UNIQUENAMES-001, AOS8-WLAN-DEFGROUP-001]
+  # ---- Requirement 4: Protect cardholder data with strong cryptography in transit ----
+  - id: "4.2.1"
+    title: Strong cryptography and security protocols safeguard PAN during transmission
+    controls: [AOS8-WLAN-001, AOS8-WLAN-FWDMODE-001, AOS8-AUTH-EAP-TYPE-001, AOS8-GLOBAL-FIPS-001]
+  - id: "4.2.1.1"
+    title: Inventory of trusted keys/certificates used to protect PAN in transit maintained
+    controls: [AOS8-AUTH-EAP-TLS-CERTS-001, AOS8-MGMT-CERT-INVENTORY-001, AOS8-MGMT-TRUSTEDCA-001, 
+          AOS8-MGMT-CSR-001, AOS8-MGMT-CERT-IMPORT-001]
+  # ---- Requirement 8: Identify users and authenticate access ----
+  - id: "8.2.1"
+    title: All users assigned a unique ID before access to system components is granted
+    controls: [AOS8-AUTH-SERVER-001, AOS8-AUTH-SERVERGROUP-001, AOS8-MGMT-LOCALAUTH-001, 
+          AOS8-DOT1X-001]
+  - id: "8.2.2"
+    title: Shared/group/generic accounts used only when necessary and managed
+    controls: [AOS8-MGMT-LOCALAUTH-001, AOS8-AUTH-TACACS-SESSIONAUTH-001, AOS8-AUTH-SERVER-001]
+  - id: "8.3.6"
+    title: Passwords/passphrases meet minimum length and complexity
+    controls: [AOS8-MGMT-PWDPOL-001]
+  - id: "8.3.9"
+    title: Where a single factor is a password, authentication policy controls enforced
+    controls: [AOS8-MGMT-PWDPOL-001, AOS8-GLOBAL-TIMEOUT-001, AOS8-GLOBAL-TIMEOUT-002]
+  - id: "8.4.1"
+    title: MFA / strong factors implemented for administrative non-console access
+    controls: [AOS8-MGMT-SSH-PUBKEY-001, AOS8-MGMT-WEBUI-CERTAUTH-001]
+  # ---- Requirement 10: Log and monitor all access; time synchronization ----
+  - id: "10.2.1"
+    title: Audit logs enabled and active for all system components
+    controls: [AOS8-GLOBAL-SYSLOG-001]
+  - id: "10.3.3"
+    title: Audit logs promptly backed up to a secure, central log server
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-MGMT-LOGCOPY-001]
+  - id: "10.4.2"
+    title: Audit logs of all other system components reviewed (centralized collection)
+    controls: [AOS8-GLOBAL-SYSLOG-001]
+  - id: "10.6.1"
+    title: System clocks and time synchronized using time-synchronization technology
+    controls: [AOS8-GLOBAL-NTP-001, AOS8-INIT-CLOCK-001, AOS8-INIT-TIMEZONE-001, AOS8-LIC-CLOCK-001]
+  - id: "10.6.2"
+    title: Systems configured to the correct, consistent time from authorized time servers
+    controls: [AOS8-GLOBAL-NTP-001]
+  # ---- Requirement 11.2: Detect and manage unauthorized wireless access points ----
+  - id: "11.2.1"
+    title: Authorized and unauthorized wireless access points detected and identified
+    controls: [AOS8-WIP-LIC-001, AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-MASTER-001, AOS8-WIP-AM-001, 
+          AOS8-WIP-CLASSRULES-LIC-001, AOS8-WIP-DASHBOARD-001]
+  - id: "11.2.2"
+    title: Inventory of authorized wireless access points maintained with business justification
+    controls: [AOS8-AP-GROUP-001, AOS8-AP-NAME-001, AOS8-WLAN-UNIQUENAMES-001]

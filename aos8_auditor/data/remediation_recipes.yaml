@@ -1,0 +1,275 @@
+# Per-control remediation recipes for the guided wizard (`--remediate`).
+#
+# The wizard derives its command lines from each control's remediation_hint. This
+# table adds only what a hint string cannot express:
+#
+#   order     dependency hint. Lower is emitted first; default 500. Used so an
+#             object exists before something references it, and so the changes
+#             that can lock you out are written last.
+#   rollback  the inverse commands, where an inverse exists. Hand-written and
+#             reviewed rather than derived, because these get pasted into a
+#             production controller. Omit when there is no safe inverse and set
+#             rollback_note instead — the wizard then records the observed value
+#             for a human to restore.
+#   lines     override the parsed hint entirely (rare).
+#   notes     extra operator guidance shown on the change's page.
+#
+# Nothing here affects the audit. It only shapes what the wizard offers to write.
+
+recipes:
+
+  # --- ordering band 100: objects other changes will reference ---------------
+  AOS8-AUTH-SERVER-001:
+    order: 100
+    rollback:
+      - no aaa authentication-server radius <name>
+    notes:
+      - Creating the server has no effect on authentication until it is bound into
+        a server group (AOS8-AUTH-SERVERGROUP-001).
+  AOS8-AUTH-LDAP-LDAPS-001:
+    order: 100
+  AOS8-AUTH-RADIUS-PORTS-001:
+    order: 100
+  AOS8-AUTH-TACACS-SESSIONAUTH-001:
+    order: 100
+  AOS8-ROLE-UDP6869-DENY-001:
+    order: 110
+    rollback_note: >-
+      Removing one rule from a session ACL changes rule ORDER as well as content;
+      restore the policy from the pre-change running config rather than by hand.
+  AOS8-ADMIN-POLICY-001:
+    order: 110
+  AOS8-NET-MGMTIF-001:
+    order: 120
+  AOS8-NET-VLAN-STATICIP-001:
+    order: 120
+
+  # --- ordering band 200: groups that reference the objects above ------------
+  AOS8-AUTH-SERVERGROUP-001:
+    order: 200
+    rollback:
+      - no aaa server-group <name>
+  AOS8-ROLE-SRVDERIV-001:
+    order: 210
+
+  # --- ordering band 300: bindings and profiles ------------------------------
+  AOS8-AUTH-SERVERGROUP-NONDEFAULT-001:
+    order: 300
+  AOS8-ROLE-DEFAULTROLE-001:
+    order: 300
+  AOS8-ROLE-INITROLE-001:
+    order: 300
+  AOS8-ROLE-MACHINEROLES-001:
+    order: 300
+  AOS8-DOT1X-001:
+    order: 310
+  AOS8-ADMIN-POLICY-002:
+    order: 320
+    rollback:
+      # 'no ip access-group session' is complete on its own -- naming the policy
+      # after it is one token too many and the whole line is refused, which
+      # would only have surfaced at the moment someone needed to unbind it.
+      - interface gigabitethernet <port>
+      - no ip access-group session
+    notes:
+      - 'RISK: verify the policy permits your own management host before binding it
+        to the port you manage the controller through.'
+
+  # --- ordering band 500 (default): independent hot changes ------------------
+  AOS8-FW-ARPSPOOF-001:
+    rollback: [firewall, no prohibit-arp-spoofing]
+  AOS8-FW-IPSPOOF-001:
+    rollback: [firewall, no prohibit-ip-spoofing]
+  AOS8-FW-DENY-INTER-USER-001:
+    rollback: [firewall, no deny-inter-user-traffic]
+  AOS8-FW-LOCALVALIDUSERS-001:
+    rollback: [firewall, no local-valid-users]
+  AOS8-FW-CP-ATTACKRATE-001:
+    rollback: [firewall, no attack-rate cp]
+  AOS8-FW-CP-BWCONTRACT-001:
+    rollback_note: >-
+      Restore the previous cp-bandwidth-contract values from the pre-change
+      running config; there is no single command that returns them to default.
+  AOS8-NET-IPV6-ENABLED-001:
+    # Top level, not inside 'firewall': the 8.13 firewall stanza has no ipv6
+    # keyword at all, so the nested form the guide prints is refused there.
+    rollback: [no ipv6 enable]
+  AOS8-GLOBAL-STP-001:
+    rollback: [spanning-tree]
+  AOS8-GLOBAL-LCD-001:
+    rollback: [lcd-menu, no disable menu]
+  AOS8-GLOBAL-SYSLOG-001:
+    rollback:
+      - no logging <syslog-server-ip>
+  AOS8-GLOBAL-TIMEOUT-001:
+    rollback_note: >-
+      'loginsession timeout' has no negation that restores a specific prior value;
+      re-set it to the value recorded below.
+  AOS8-GLOBAL-TIMEOUT-002:
+    rollback_note: >-
+      Re-set web-server session-timeout to the value recorded below.
+  AOS8-GLOBAL-BANNER-001:
+    # 'banner motd' does not take the text as an argument. The delimiter is one
+    # character, alone, and the banner is the lines that follow it, ending with
+    # the delimiter on a line of its own. The one-line form the hint reads as is
+    # rejected: "% Invalid input detected at '^' marker."
+    lines:
+      - banner motd <delim>
+      - <approved text>
+      - <delim>
+    rollback: [no banner motd]
+  AOS8-CRYPTO-SSH-CIPHERS-001:
+    # These knobs negate whole, not per-algorithm: 'no ssh disable-ciphers' is a
+    # complete command and the argument form is rejected outright. Two knobs,
+    # not one — the MACs live under 'disable-mac', not 'disable-ciphers'.
+    rollback:
+      - no ssh disable-ciphers
+      - no ssh disable-mac
+  AOS8-CRYPTO-TLS-001:
+    rollback_note: >-
+      Re-set web-server ssl-protocol to the value recorded below; there is no
+      negation that restores the previous protocol set.
+  AOS8-CRYPTO-WEBCIPHERS-001:
+    rollback_note: >-
+      Re-enable the suites recorded below with 'cipher-suite <suite> ...' inside
+      'web-server profile'. There is no negation that restores a previous suite
+      list: 'no cipher-suite' takes no argument and resets to the GCM default,
+      which is what the fix does in the first place.
+  AOS8-AAA-ENFORCE-DHCP-001:
+    rollback:
+      - aaa profile <name>
+      - no enforce-dhcp
+  AOS8-ROLE-RA-GUARD-001:
+    rollback:
+      - user-role <name>
+      - no access-list session ra-guard
+  AOS8-NET-GW-001:
+    rollback:
+      - no ip default-gateway <gateway-ip>
+  AOS8-INIT-TIMEZONE-001:
+    rollback: [no clock timezone]
+  AOS8-INIT-002:
+    rollback_note: >-
+      Re-set the hostname to the value recorded below.
+  AOS8-GLOBAL-NTP-001:
+    rollback:
+      - no ntp server <ip>
+      - no ntp authenticate
+      - no ntp trusted-key <id>
+  AOS8-WLAN-HIDESSID-001:
+    rollback:
+      - wlan ssid-profile <p>
+      - no hide-ssid
+      - no deny-bcast
+  AOS8-WLAN-FWDMODE-001:
+    rollback_note: >-
+      Re-set forward-mode on the virtual-ap to the value recorded below.
+  AOS8-CRYPTO-ISAKMP-LEGACYDH-001:
+    rollback_note: >-
+      Re-creating a deleted ISAKMP policy means re-entering all of its parameters;
+      restore them from the pre-change running config.
+  AOS8-CRYPTO-ISAKMP-STRENGTH-001:
+    rollback:
+      - no crypto isakmp policy 20
+
+  # --- ordering band 700: disruptive, or dependent on everything above -------
+  AOS8-CRYPTO-TKIP-001:
+    order: 700
+    rollback_note: >-
+      Re-set opmode on the SSID profile to the value recorded below. Clients
+      retired for TKIP will not return on their own.
+  AOS8-WLAN-001:
+    order: 700
+    rollback_note: >-
+      Re-set opmode on the SSID profile to the value recorded below.
+  AOS8-WLAN-VLAN-001:
+    order: 700
+  AOS8-CPSEC-001:
+    order: 700
+    rollback:
+      - control-plane-security
+      - no cpsec-enable
+    notes:
+      - Rolling this back re-provisions the APs a second time, so a rollback is as
+        disruptive as the change itself.
+  AOS8-AP-CONSOLE-PROTECT-001:
+    order: 700
+    rollback:
+      - ap system-profile <name>
+      - no ap-console-protection
+  AOS8-AP-TELNET-DEBUG-001:
+    order: 700
+    rollback:
+      - ap system-profile <name>
+      - telnet
+  AOS8-PORTS-CAPTIVE-PORTAL-001:
+    order: 700
+    rollback_note: >-
+      Control-plane rules are ordered; remove the added deny rules by restoring the
+      'firewall cp' block from the pre-change running config.
+  AOS8-FW-CP-ACL-001:
+    order: 700
+    rollback_note: >-
+      Control-plane rules are ordered; restore the 'firewall cp' block from the
+      pre-change running config.
+    notes:
+      - 'RISK: the permit rules must include your own management host, and they must
+        come before the denies. Getting this wrong locks you out of SSH and HTTPS.'
+
+  # --- ordering band 900: written last; these are the lock-yourself-out set --
+  AOS8-MGMT-CENTRALAUTH-001:
+    order: 900
+    rollback:
+      - aaa authentication mgmt
+      # 'no server-group' takes no argument — the profile has one server group,
+      # so naming it is one token too many and the line is rejected.
+      - no server-group
+    notes:
+      - Verify an administrator can actually log in through the new server group
+        before applying AOS8-MGMT-LOCALAUTH-001.
+  AOS8-MGMT-LOCALAUTH-001:
+    order: 910
+    rollback: [mgmt-user localauth]
+    notes:
+      - 'RISK: this removes the local fallback. Confirm central authentication works
+        and that redundant servers are configured first.'
+  AOS8-MGMT-SSH-PUBKEY-001:
+    order: 910
+    rollback: [no ssh mgmt-auth public-key]
+  AOS8-MGMT-WEBUI-CERTAUTH-001:
+    order: 910
+    rollback:
+      - web-server profile
+      # 'no mgmt-auth' takes no argument; 'no mgmt-auth certificate' is rejected.
+      - no mgmt-auth
+  AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001:
+    order: 920
+    rollback: [telnet cli, telnet soe]
+  AOS8-MGMT-PWDPOL-001:
+    order: 920
+    rollback_note: >-
+      Restore the previous 'aaa password-policy mgmt' values from the pre-change
+      running config.
+  AOS8-NET-DEFAULTVLAN-001:
+    order: 930
+    rollback_note: >-
+      Restore the VLAN 1 interface from the pre-change running config. Do not
+      re-enable it without confirming nothing was moved onto it in the meantime.
+  AOS8-NET-CTRLIP-001:
+    order: 940
+    rollback:
+      - controller-ip vlan <id>
+    rollback_note: >-
+      The rollback re-points controller-ip at the VLAN recorded below and needs the
+      same reboot the change did.
+  AOS8-MGMT-CONSOLE-BLOCK-001:
+    order: 950
+    rollback: [no mgmt-user console-block]
+    # No note: the control's own hint already carries the full RISK warning, and
+    # repeating it is how a real warning starts reading as boilerplate.
+  AOS8-GLOBAL-FIPS-001:
+    order: 960
+    rollback: [no fips enable]
+    notes:
+      - FIPS mode takes effect only after a reload. The wizard never writes a
+        reload; schedule it as a separate, human step.

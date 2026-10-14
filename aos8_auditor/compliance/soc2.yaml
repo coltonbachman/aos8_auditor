@@ -1,0 +1,92 @@
+name: soc2
+framework: SOC 2 (Trust Services Criteria)
+version: "2017 (rev. 2022)"
+description: >
+  Crosswalk of ArubaOS 8 WLAN-controller hardening controls to the AICPA SOC 2
+  Trust Services Criteria (TSC), focused on the Common Criteria for logical access
+  (CC6), system operations / detection (CC7), and the supporting control-activity
+  and change criteria (CC5/CC8) that a WLAN controller's configuration can evidence.
+disclaimer: >
+  Advisory crosswalk of the WLAN-controller-configuration slice only. It is NOT a
+  SOC 2 attestation, examination, or service-auditor opinion. A criterion shown MET
+  here addresses only the wireless-infrastructure evidence; the same criterion almost
+  always also requires policy, process, host, application, and entity-level evidence
+  outside this controller. Validate scope and conclusions with a qualified service auditor.
+profile: high_security
+org_profile_defaults:
+  wip_required: true          # CC7.1/CC7.2 wireless monitoring / rogue detection
+  ha_required: false
+requirements:
+  - id: "CC5.2"
+    title: Selects and develops general control activities over technology (config baselines)
+    controls: [AOS8-INIT-STARTUP-001, AOS8-INIT-PERSIST-001, AOS8-INIT-NEGATE-001, 
+          AOS8-GLOBAL-BANNER-001]
+  - id: "CC6.1"
+    title: Logical access security — restrict access to protected information assets
+    controls: [AOS8-ADMIN-POLICY-001, AOS8-ADMIN-POLICY-002, AOS8-ROLE-POLICY-001, 
+          AOS8-ROLE-DEFAULTROLE-001, AOS8-ROLE-INITROLE-001, AOS8-ROLE-STATEFUL-001]
+  - id: "CC6.2"
+    title: Register and authorize users before granting access; remove access when appropriate
+    controls: [AOS8-AUTH-SERVER-001, AOS8-AUTH-SERVERGROUP-001, AOS8-DOT1X-001, AOS8-WLAN-001]
+  - id: "CC6.3"
+    title: Authorize, modify, or remove access based on roles and least privilege
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-DEFAULTROLE-001, AOS8-ROLE-SRVDERIV-001, 
+          AOS8-WLAN-SRVDERIVE-001, AOS8-ROLE-ORPHAN-POLICY-001, AOS8-ROLE-NETDEST-MEMBERSHIP-001]
+  - id: "CC6.6"
+    title: Implement controls to protect against threats from outside the system boundary
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-NET-DEFAULTVLAN-001, 
+          AOS8-NET-UNTRUSTED-PORT-001, AOS8-WLAN-VLAN1-001, AOS8-WLAN-FWDMODE-001, 
+          AOS8-NET-CTRLIP-001]
+  - id: "CC6.6-auth"
+    title: Authenticate external/wireless users at the system boundary
+    controls: [AOS8-WLAN-001, AOS8-AUTH-EAP-TYPE-001, AOS8-AUTH-EAP-TLS-CERTS-001, 
+          AOS8-AUTH-LOCALDB-DOT1X-001, AOS8-AUTH-SERVERGROUP-NONDEFAULT-001]
+  - id: "CC6.7"
+    title: Restrict transmission and protect data in motion with strong cryptography
+    controls: [AOS8-WLAN-001, AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-MGMT-SSH-VERSION-001, 
+          AOS8-MGMT-FILETRANSFER-SCP-001, AOS8-AUTH-LDAP-LDAPS-001, AOS8-GLOBAL-FIPS-001]
+  - id: "CC6.7-mgmt"
+    title: Encrypt and authenticate management/administrative sessions
+    controls: [AOS8-MGMT-SSH-PUBKEY-001, AOS8-MGMT-CERT-001, AOS8-MGMT-WEBUI-CERTAUTH-001, 
+          AOS8-GLOBAL-SNMP-001, AOS8-MGMT-TRUSTEDCA-001]
+  - id: "CC6.1-admin-auth"
+    title: Identify and authenticate administrators via managed credentials
+    controls: [AOS8-INIT-001, AOS8-MGMT-PWDPOL-001, AOS8-MGMT-LOCALAUTH-001, AOS8-AUTH-SERVER-001, 
+          AOS8-AUTH-TACACS-SESSIONAUTH-001, AOS8-MGMT-SSH-PUBKEY-001]
+  - id: "CC6.1-session"
+    title: Terminate inactive sessions to limit exposure of authenticated access
+    controls: [AOS8-GLOBAL-TIMEOUT-001, AOS8-GLOBAL-TIMEOUT-002, AOS8-MGMT-WEBUI-SESSLIMIT-001]
+  - id: "CC6.4"
+    title: Restrict physical access to facilities and protected hardware
+    controls: [AOS8-PHYS-INSTALL-001, AOS8-PHYS-SECKIT-001, AOS8-PHYS-CONSOLE-001, 
+          AOS8-GLOBAL-LCD-001, AOS8-PHYS-RECEIVE-001]
+  - id: "CC6.4-tamper"
+    title: Tamper-evident protection of physical access points (FIPS placement / TEL)
+    controls: [AOS8-PHYS-TEL-001, AOS8-PHYS-TELLID-001, AOS8-PHYS-TELPORT-001, AOS8-PHYS-TELREAD-001,
+      AOS8-PHYS-CO-001]
+  - id: "CC6.8"
+    title: Prevent or detect introduction of unauthorized or malicious software
+    controls: [AOS8-MGMT-FILETRANSFER-SCP-001, AOS8-MGMT-IMAGE-TRANSFER-001]
+  - id: "CC7.1"
+    title: Detect configuration changes and the introduction of new vulnerabilities
+    controls: [AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-LIC-001, AOS8-WIP-MASTER-001, AOS8-WIP-AM-001, 
+          AOS8-WIP-CLASSRULES-LIC-001]
+  - id: "CC7.2"
+    title: Monitor system components for anomalies indicative of malicious acts
+    controls: [AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-CONTAINMENT-001, AOS8-WIP-TARPIT-LIC-001, 
+          AOS8-WIP-BLACKLIST-ENABLE-001, AOS8-WIP-DASHBOARD-001, AOS8-GLOBAL-SYSLOG-001]
+  - id: "CC7.2-logging"
+    title: Generate and centralize logs with reliable timestamps for monitoring
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-GLOBAL-NTP-001, AOS8-INIT-TIMEZONE-001, 
+          AOS8-LIC-CLOCK-001]
+  - id: "CC7.3"
+    title: Evaluate security events to determine response (rogue/interfering review)
+    controls: [AOS8-WIP-DASHBOARD-001, AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-BLACKLIST-TIME-001]
+  - id: "CC7.5"
+    title: Identify, develop, and implement activities to recover from incidents (HA/redundancy)
+    controls: [AOS8-NET-VRRP-001, AOS8-NET-VRRP-AUTH-001, AOS8-MGMT-BACKUP-001, 
+          AOS8-WIP-BLACKLIST-PERSIST-001]
+  - id: "CC8.1"
+    title: Authorize, design, develop, test, and implement changes (config integrity)
+    controls: [AOS8-INIT-PERSIST-001, AOS8-MGMT-BACKUP-001, AOS8-MGMT-RESTORE-001, 
+          AOS8-INIT-STARTUP-001]

@@ -1,0 +1,206 @@
+# External authentication controls: RADIUS auth/acct ports + client
+# registration, LDAP LDAPS (authport 636), TACACS+ session-authorization,
+# AAA server-group existence, and EAP type strength.
+#
+# The generic "an external auth server is defined and enabled" check lives in
+# AOS8-AUTH-SERVER-001; these controls verify the per-server-type hardening
+# details that the engine can read from running-config / the auth-server show
+# commands without overlapping that intent.
+
+- id: AOS8-AUTH-RADIUS-PORTS-001
+  title: RADIUS server has an explicit authentication port configured
+  category: auth
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_auth_servers, command: show aaa authentication-server radius}
+    - {key: running_config, command: show running-config}
+  # Only relevant once a RADIUS server is actually defined/enabled; if none is
+  # present this control is not the right place to flag it (AOS8-AUTH-SERVER-001
+  # owns "no external auth at all"), so route the no-RADIUS case to manual.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_equals, arg: {path: radius_enabled, value: 0}}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: radius_authport_set}
+        then: pass
+      - else: warn
+  remediation_hint: "aaa authentication-server radius <name> ; authport 1812 ; acctport 1813  (set explicit IANA ports, not legacy 1645/1646)."
+  references: [{guide_section: "Controller-to-RADIUS Communication Parameters", ref: "3196-3199"}]
+
+- id: AOS8-AUTH-RADIUS-CLIENTREG-001
+  title: RADIUS shared secret matches and controller IP registered as a client
+  category: auth
+  severity: manual
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_auth_servers, command: show aaa authentication-server radius}
+    - {key: running_config, command: show running-config}
+  # The shared secret is masked in read-only output and whether the controller's
+  # IP is registered as a RADIUS client lives on the RADIUS server, not the
+  # controller — both are server-side / off-box, so this is attestation-only.
+  remediation_hint: "Confirm the controller IP is added as a NAS/RADIUS client and that the shared secret matches on both the controller and the RADIUS server."
+  references: [{guide_section: "Controller-to-RADIUS Communication Parameters", ref: "3196-3199"}]
+
+- id: AOS8-AUTH-LDAP-LDAPS-001
+  title: LDAP authentication server uses secure LDAPS (authport 636)
+  category: auth
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_auth_servers, command: show aaa authentication-server ldap}
+    - {key: running_config, command: show running-config}
+  # When no LDAP server is configured the control is not applicable as a finding;
+  # route the no-LDAP case to manual rather than fail. A configured LDAP server
+  # MUST use 636 (LDAPS); plain 389 sends the admin-dn bind password in cleartext.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: ldap_ldaps_only}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: ldap_ldaps_only}
+        then: pass
+      - else: fail
+  remediation_hint: "aaa authentication-server ldap <name> ; authport 636  (LDAPS over SSL; never bind over cleartext 389)."
+  references: [{guide_section: "Configuring an LDAP Authentication Server", ref: "3058-3104"}]
+
+- id: AOS8-AUTH-TACACS-SESSIONAUTH-001
+  title: TACACS+ server has session authorization enabled
+  category: auth
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_auth_servers, command: show aaa authentication-server tacacs}
+    - {key: running_config, command: show running-config}
+  # Only meaningful when a TACACS+ server exists; otherwise manual. Session
+  # authorization is what makes TACACS+ enforce per-command/role authorization
+  # for management sessions rather than authentication alone.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: tacacs_session_auth}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: tacacs_session_auth}
+        then: pass
+      - else: fail
+  remediation_hint: "aaa authentication-server tacacs <name> ; session-authorization ; enable"
+  references: [{guide_section: "Configuring a TACACS+ Authentication Server", ref: "3107-3134"}]
+
+- id: AOS8-AUTH-SERVERGROUP-001
+  title: AAA server group defined with at least one auth-server member
+  category: auth
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_server_groups, command: show aaa server-group}
+    - {key: running_config, command: show running-config}
+  # An external auth server is only used by 802.1x/management auth once it is
+  # bound into a server group; a server defined but not in any group is inert.
+  # Guard on external_auth_present so a controller with no external auth at all
+  # is handled by AOS8-AUTH-SERVER-001, not double-flagged here.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_false, arg: external_auth_present}
+        then: manual
+      - when: {source: fact, predicate: fact_gte, arg: {path: server_group_count, value: 1}}
+        then: pass
+      - else: fail
+  remediation_hint: "aaa server-group <name> ; auth-server <radius-or-ldap-or-tacacs-server>"
+  references: [{guide_section: "Add Servers to a Server Group", ref: "3600-3642"}]
+
+- id: AOS8-AUTH-SERVERGROUP-NONDEFAULT-001
+  title: 802.1X uses a purpose-built server group (not 'internal' / 'default')
+  category: auth
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: aaa_server_groups, command: show aaa server-group}
+    - {key: running_config, command: show running-config}
+  # The 802.1x server group should point at the external RADIUS group, not the
+  # built-in 'internal' / 'default' server group (local DB only). If no
+  # dot1x-server-group is configured at all, AOS8-DOT1X-001 owns that gap.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*dot1x-server-group\\s+\"?(internal|default)\"?\\s*$"}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*dot1x-server-group\\s+\\S+"}
+        then: pass
+      - else: manual
+  remediation_hint: "aaa profile <p> ; dot1x-server-group <external-radius-group>  (do not leave it on the internal/local DB group)."
+  references: [{guide_section: "Configuring the AAA Profile (dot1x-server-group)", ref: "3645-3698"}]
+
+- id: AOS8-AUTH-EAP-TLS-CERTS-001
+  title: EAP-TLS server and trusted-CA certificates present when cert auth required
+  category: auth
+  severity: high
+  applicability:
+    requires_evidence: [server_certs, trusted_cas]
+    condition: "require_cert_auth == true"
+  evidence:
+    - {key: server_certs, command: show crypto-local pki serverCerts}
+    - {key: trusted_cas, command: show crypto-local pki trustedCAs}
+    - {key: running_config, command: show running-config}
+  # The negotiated EAP type is transparent to the controller and cannot be read
+  # back; what IS verifiable is that EAP-TLS prerequisites (a real server
+  # certificate AND a trusted CA data row — not just a column header) are
+  # installed. Denied cert evidence -> manual via requires_evidence.
+  logic:
+    type: all_of
+    clauses:
+      - when: {source: fact, predicate: fact_true, arg: server_cert_present}
+        then: pass
+      - when: {source: fact, predicate: fact_true, arg: trusted_ca_present}
+        then: pass
+      - else: fail
+  remediation_hint: "Import a server certificate and the issuing trusted CA, then deploy EAP-TLS on the supplicant + RADIUS server (mutual PKI)."
+  references: [{guide_section: "Strong EAP Types (PEAP / EAP-TLS)", ref: "3177-3231"}]
+
+- id: AOS8-AUTH-EAP-TYPE-001
+  title: 802.1X deployments use a strong EAP type (PEAP or EAP-TLS)
+  category: auth
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  # The EAP type is negotiated between the supplicant and the RADIUS server and
+  # is transparent to the controller, so it cannot be verified read-only on the
+  # box — this is an attestation against the RADIUS/supplicant configuration.
+  evidence:
+    - {key: aaa_dot1x, command: show aaa authentication dot1x}
+    - {key: aaa_auth_servers, command: show aaa authentication-server all}
+  remediation_hint: "Confirm the RADIUS server and supplicants are configured for PEAP or EAP-TLS only; disable weak/legacy EAP (e.g. EAP-MD5, LEAP)."
+  references: [{guide_section: "Strong EAP Types (PEAP / EAP-TLS)", ref: "3177-3194"}]
+
+- id: AOS8-AUTH-LOCALDB-DOT1X-001
+  title: 802.1X does not rely on the controller internal/local user database
+  category: auth
+  severity: medium
+  applicability:
+    requires_evidence: [running_config]
+    condition: "require_external_only_auth == true"
+  evidence:
+    - {key: aaa_profile, command: show aaa profile}
+    - {key: aaa_server_groups, command: show aaa server-group}
+    - {key: running_config, command: show running-config}
+  # In an external-only deployment the dot1x server group must reference an
+  # external RADIUS server, not the built-in 'internal' DB. external_auth_present
+  # confirms at least one external server exists to bind to.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_false, arg: external_auth_present}
+        then: fail
+      - when: {source: running_config, predicate: regex, arg: "(?im)^\\s*dot1x-server-group\\s+\"?internal\"?\\s*$"}
+        then: fail
+      - else: pass
+  remediation_hint: "Bind dot1x-server-group to an external RADIUS server group; do not use the 'internal' local user database for 802.1X."
+  references: [{guide_section: "802.1x Authentication Architecture", ref: "3138-3199"}]

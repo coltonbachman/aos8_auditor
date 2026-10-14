@@ -1,0 +1,194 @@
+# Licensing & feature-readiness controls (AOS8-LIC-*).
+# Most licensing posture is verifiable only from `show license summary` /
+# `show license` text. Cross-device (Master-Local / Mobility Master pool)
+# and action-history (backup/install) items are MANUAL — they cannot be proven
+# from a single controller's read-only output. NOTE: RFProtect-license presence
+# is already covered by AOS8-WIP-LIC-001 and is intentionally not duplicated here.
+
+- id: AOS8-LIC-EVAL-001
+  title: Production features not running on evaluation licenses
+  category: licensing
+  severity: medium
+  applicability:
+    requires_evidence: [license_summary]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  # An "Evaluation"/"Eval" license line means a production feature is time-limited
+  # (90-day) rather than backed by a permanent/subscription license. Active eval
+  # entries warn; the auditor cannot tell whether the feature is production-critical.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: license_summary, predicate: regex, arg: "(?im)\\b(evaluation|eval)\\b"}
+        then: warn
+      - else: pass
+  remediation_hint: "Apply a Permanent or Subscription license for any production add-on (RFProtect/PEFNG/ACR/WebCC); replace evaluation keys before they expire."
+  references: [{guide_section: "License Types (Permanent/Subscription/Evaluation)", ref: "788-858"}]
+
+- id: AOS8-LIC-EXPIRED-001
+  title: No expired licenses lingering in the license database
+  category: licensing
+  severity: informational
+  applicability:
+    requires_evidence: [license_summary]
+  evidence:
+    - {key: license_summary, command: show license summary}
+  # Expired evaluation entries persist in the license DB until 'write erase all'
+  # and are benign, but their presence is worth surfacing (a feature may have
+  # silently lapsed). Informational only.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: license_summary, predicate: regex, arg: "(?im)\\bexpired\\b"}
+        then: warn
+      - else: pass
+  remediation_hint: "Expired evaluation licenses remain in the DB (no operational impact) until 'write erase all'. Confirm any lapsed feature was intentionally retired or re-licensed."
+  references: [{guide_section: "Expired Evaluation Licenses Persist", ref: "808-858"}]
+
+- id: AOS8-LIC-PEFV-001
+  title: PEFV / PEFNG policy-enforcement firewall license present (identity-based security)
+  category: licensing
+  severity: medium
+  applicability:
+    requires_evidence: [license_summary]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  # PEFV/PEFNG enables role/identity-based stateful firewall enforcement. Without
+  # it, user-role policies cannot be enforced. Match either the PEFV (VPN) or
+  # PEFNG (next-gen) module name in the license summary.
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: pefng_licensed}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: pefng_licensed}
+        then: pass
+      - else: warn
+  remediation_hint: "Install the PEFV/PEFNG (Policy Enforcement Firewall) license so role/identity-based firewall policies can be enforced."
+  references: [{guide_section: "PEFV / Policy Enforcement Firewall Module", ref: "3224-3226"}]
+
+- id: AOS8-LIC-CLOCK-001
+  title: License-protecting time integrity (no clock rollback disabling licensed modules)
+  category: licensing
+  severity: high
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: ntp_servers, command: show ntp servers}
+    - {key: ntp_status, command: show ntp status}
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  # Setting the system clock backward disables software-licensed modules. The
+  # durable mitigation is a trusted, forward-moving time source: require NTP to
+  # be configured. (Authenticated-NTP quality is graded by AOS8-GLOBAL-NTP-001;
+  # here we only require that the clock is anchored to a network time source so
+  # an admin can't trivially roll it back and kill licensed features.)
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_gte, arg: {path: ntp_server_count, value: 1}}
+        then: pass
+      - else: warn
+  remediation_hint: "Anchor the clock to trusted NTP and restrict admin access to clock settings; a backward clock change disables licensed modules and their features."
+  references: [{guide_section: "Protect System Clock Integrity (Licensing Caution)", ref: "814-818"}]
+
+- id: AOS8-LIC-MASTERLOCAL-001
+  title: Master-Local — master/backup-master licensed for every feature used on locals
+  category: licensing
+  severity: high
+  applicability:
+    requires_evidence: [license_summary]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  # Cross-device check: in Master-Local, the master (and any backup master) must
+  # hold every feature license used on locals. Not provable from a single
+  # controller's read-only output — manual cross-controller comparison.
+  remediation_hint: "On every master and backup master, confirm 'show license' lists each feature configured on any local; backup master must mirror the master's license set."
+  references: [{guide_section: "Master-Local Licensing", ref: "862-881"}]
+
+- id: AOS8-LIC-MM-POOL-001
+  title: Mobility Master — all licenses installed on MM and assigned to group pools
+  category: licensing
+  severity: high
+  applicability:
+    requires_evidence: [license_summary]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: running_config, command: show running-config}
+  # Architecture/cross-device: all licenses live on the MM and must be added to
+  # the license pool assigned to each managed-controller group. Pool assignment
+  # is an MM-side check not provable from a single managed node — manual.
+  remediation_hint: "On the Mobility Master, verify each managed-controller group's license pool contains the licenses its controllers need ('show license-pool-managed'); backup MM inherits licenses (no separate install)."
+  references: [{guide_section: "Mobility Master Licensing Pools", ref: "885-894"}]
+
+- id: AOS8-LIC-COUNTS-001
+  title: AP, PEFNG, and RFProtect license counts are equal (no silent AP cap)
+  category: licensing
+  severity: medium
+  applicability:
+    requires_evidence: [license_summary]
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: ap_database, command: show ap database}
+  # When AP / PEFNG / RFProtect counts are unequal, active APs are capped to the
+  # minimum of the three. Comparing per-feature counts reliably needs structured
+  # parsing (not a single anchored regex) — manual until a counts fact exists.
+  remediation_hint: "In 'show license', confirm AP, PEFNG, and RFProtect counts are equal; otherwise active APs are limited to MIN(AP, PEFNG, RFP)."
+  references: [{guide_section: "License Interaction (AP/PEFNG/RFP counts)", ref: "905-916"}]
+
+- id: AOS8-LIC-CAPACITY-001
+  title: License capacity covers peak + failover AP/user demand
+  category: licensing
+  severity: manual
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: ap_database, command: show ap database}
+  # Planning/intent: installed counts must allow peak AP load plus failover and
+  # estimated user load (~20 users/AP). Sizing intent is not auditable read-only.
+  remediation_hint: "Size licenses for max simultaneous demand: normal AP load + backup/failover load; estimate ~20 users per AP plus allowance for large gatherings."
+  references: [{guide_section: "License Capacity Planning Best Practices", ref: "945-949"}]
+
+- id: AOS8-LIC-BACKUP-001
+  title: Configuration and license database backed up before any license change
+  category: licensing
+  severity: manual
+  evidence:
+    - {key: license_summary, command: show license summary}
+  # Action history: 'backup flash' + 'license export <file>' must be performed
+  # (and copied off-box) before license changes. Not verifiable read-only.
+  remediation_hint: "Before changing licenses: 'backup flash' (flashbackup.tar.gz) and 'license export licensebackup.db'; copy both off the controller, then delete the local copies."
+  references: [{guide_section: "Back Up Config and License DB Before Changes", ref: "919-942"}]
+
+- id: AOS8-LIC-DEVICEMATCH-001
+  title: License keys match this device's serial number
+  category: licensing
+  severity: manual
+  evidence:
+    - {key: license_summary, command: show license summary}
+    - {key: show_version, command: show version}
+  # Each key is generated from the MM/controller serial and is valid only for
+  # that device. Confirming key-to-serial binding is an off-device records check.
+  remediation_hint: "Confirm installed license keys were generated for this device's serial number (keys are non-transferable); reconcile against your license records."
+  references: [{guide_section: "License Keys Are Device-Specific", ref: "954-977"}]
+
+- id: AOS8-LIC-RECORDS-001
+  title: License assets recorded on the Aruba license-management portal
+  category: licensing
+  severity: manual
+  remediation_hint: "Register/maintain all license assets on the Aruba Software License Management (ASP) portal; keep a valid sales email on file for license delivery and recovery."
+  references: [{guide_section: "Maintain License Records (Portal)", ref: "958-985"}]
+
+- id: AOS8-LIC-RESET-001
+  title: Operators understand reset effects on the license database
+  category: licensing
+  severity: manual
+  evidence:
+    - {key: license_summary, command: show license summary}
+  # Awareness/procedure: reboot and 'write erase' preserve licenses; 'write erase
+  # all' deletes the license DB and requires reinstalling every key. Reset
+  # behavior is operator knowledge, not a config state.
+  remediation_hint: "Reboot/'write erase' preserve licenses; 'write erase all' deletes the license DB (all keys must be reinstalled). Plan key reinstallation before any factory reset."
+  references: [{guide_section: "Reset Behavior and the License DB", ref: "1084-1092"}]

@@ -1,0 +1,112 @@
+# Security Policy / physical controls (FIPS Crypto-Officer responsibility,
+# Security Kit, mounting hardware, reading TEL serials, 7200 TEL placement,
+# TEL application/security log). These are physical/procedural attestations that
+# cannot be proven from read-only controller output, so they are MANUAL.
+# Machine-verifiable FIPS/LCD/banner checks live in global.yaml; this file
+# avoids duplicating those.
+
+- id: AOS8-PHYS-CO-001
+  title: Crypto Officer responsible for FIPS-approved placement and procedures
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  evidence:
+    - {key: show_fips, command: show fips}
+    - {key: show_version, command: show version}
+  remediation_hint: "Designate a Crypto Officer; confirm they followed the documented installation/placement procedures so the switch operates in a FIPS-approved mode."
+  references: [{guide_section: "Security Policy / Crypto Officer Responsibility", ref: "4164-4191"}]
+
+- id: AOS8-PHYS-SECKIT-001
+  title: FIPS 140-2 Level 2 Security Kit installed
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  evidence:
+    - {key: show_fips, command: show fips}
+    - {key: show_version, command: show version}
+  remediation_hint: "Apply the Aruba Controller FIPS 140-2 Level 2 Security Kit (modified hardware, firmware, and documentation) before claiming FIPS validation."
+  references: [{guide_section: "Security Policy / FIPS Security Kit", ref: "4258-4260"}]
+
+- id: AOS8-PHYS-RECEIVE-001
+  title: Shipping carton examined for tamper evidence on receipt
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  remediation_hint: "On receipt the Crypto Officer inspects the factory-sealed carton for tears, scratches, or other irregularities indicating tampering before installation."
+  references: [{guide_section: "Security Policy / Product Examination", ref: "4262-4265"}]
+
+- id: AOS8-PHYS-MOUNT-001
+  title: Correct mounting hardware used for rack or tabletop install
+  category: physical
+  severity: manual
+  applicability:
+    platforms: ["7200"]
+  remediation_hint: "Mount with two rack brackets, four 6-32 x 1/4\" bracket screws and four 12-24 x 5/8\" rack screws (rack), or four rubber feet (tabletop); use the country-specific AC power cord."
+  references: [{guide_section: "Security Policy / Required Tools and Mounting Hardware", ref: "4209-4220"}]
+
+- id: AOS8-PHYS-TELSPARE-001
+  title: Spare Tamper-Evident Labels stored securely and use tracked
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  remediation_hint: "Crypto Officer keeps the extra/double-quantity TELs (replacement Part # 4010061-01) at a safe location and manages/tracks their use."
+  references: [{guide_section: "Security Policy / Tamper-Evident Labels", ref: "4267-4282"}]
+
+- id: AOS8-PHYS-TELREAD-001
+  title: Applied TEL serial numbers read and matched to security log
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  remediation_hint: "Visually inspect each applied TEL for change in appearance (break/removal/reapplication) and confirm its unique serial number matches the recorded security log."
+  references: [{guide_section: "Security Policy / Reading TELs", ref: "4286-4301"}]
+
+- id: AOS8-PHYS-TELLID-001
+  title: 7200 chassis-lid TELs present (minimum 15 total)
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+    platforms: ["7200"]
+  remediation_hint: "On the Aruba 7200 apply TELs spanning each chassis-lid-to-bottom seam (left and right), front bezel to lid, and expansion-slot cover plate to chassis top; minimum 15 TELs total."
+  references: [{guide_section: "Security Policy / TEL Placement - Chassis Lid", ref: "4303-4335"}]
+
+- id: AOS8-PHYS-TELMOD-001
+  title: 7200 module/cover-plate TELs present (power supplies, fan tray)
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+    platforms: ["7200"]
+  remediation_hint: "Apply TELs spanning power supply 1 to chassis top, power supply 2 (or its cover plate) to chassis, and the fan tray to chassis top and bottom, per installed-module configuration."
+  references: [{guide_section: "Security Policy / TEL Placement - Modules", ref: "4316-4322"}]
+
+- id: AOS8-PHYS-TELPORT-001
+  title: 7200 restricted-port TELs present (RJ-45 and mini-USB serial)
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+    platforms: ["7200"]
+  remediation_hint: "Apply two TELs spanning the RJ-45 and mini-USB serial ports; press firmly to the front bezel so any air gap under the label is no larger than 2-3mm."
+  references: [{guide_section: "Security Policy / TEL Placement - Restricted Ports", ref: "4326-4331"}]
+
+- id: AOS8-PHYS-TELLOG-001
+  title: TEL application procedure followed and security log recorded
+  category: physical
+  severity: manual
+  applicability:
+    profiles: [fips]
+  remediation_hint: "Apply intact TELs to clean/dry surfaces (no cutting/trimming), ensure placement is not defeated by multi-module removal, allow 24h cure, and record each TEL position and serial number in a security log."
+  references: [{guide_section: "Security Policy / Applying TELs and Security Log", ref: "4381-4401"}]
+
+- id: AOS8-PHYS-CONSOLE-001
+  title: Serial console settings and physical port access controlled
+  category: physical
+  severity: manual
+  remediation_hint: "Set the terminal emulator to 9600 8-N-1 with no flow control and restrict physical access to the front-panel serial console port to authorized personnel."
+  references: [{guide_section: "Security Policy / Serial Console Communication", ref: "563-571"}]

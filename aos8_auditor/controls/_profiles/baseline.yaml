@@ -1,0 +1,5 @@
+name: baseline
+# Baseline is permissive: SSH password fallback and missing cert-only auth are
+# acceptable (warn). FIPS-only controls are excluded by their applicability.
+verdict_overrides: {}
+severity_overrides: {}

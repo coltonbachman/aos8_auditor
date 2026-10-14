@@ -1,0 +1,182 @@
+# Cryptography controls from the ArubaOS 8 Controller Hardening Guide
+# (rev 10, January 2023), "Locking Down Services -> Cryptography", p.19-20.
+#
+# The 2020 Federal Technology Guide the rest of the catalog was built from does
+# not cover HTTPS cipher/TLS selection, SSH cipher restriction, ISAKMP policy
+# strength, or TKIP, so none of these were previously checked.
+
+- id: AOS8-CRYPTO-WEBCIPHERS-001
+  title: HTTPS restricted to high-strength cipher suites
+  category: crypto
+  severity: high
+  description: >-
+    The HTTPS server should offer only cipher suites with 128-bit or larger
+    symmetric keys. This is the factory default, so a finding here means someone
+    explicitly weakened it. In ArubaOS-FIPS the knob is absent because the
+    strong set is the only available setting.
+
+    The guide documents this as 'web-server profile ciphers high', with 'medium'
+    and 'low' as the downgrades. That keyword is gone on current trains: 8.13
+    spells it 'cipher-suite' and takes named suites rather than a strength
+    class, and the default is GCM-only. Both renderings are detected; the
+    remediation targets the current one, because 'ciphers high' is refused
+    outright by an 8.13 parser.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: web_ciphers_high}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: web_ciphers_high}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; web-server profile ; no cipher-suite  (clears the enabled suite list back to the GCM-only default; on an older train that still has 'ciphers high', use that)"
+  references:
+    - {guide_section: "Cryptography - HTTPS", page: 19, document: controller_2023}
+
+- id: AOS8-CRYPTO-TLS-001
+  title: TLS 1.0 and TLS 1.1 disabled on the web server
+  category: crypto
+  severity: high
+  description: >-
+    'For the strongest security configuration, TLS 1.0 and TLS 1.1 should be
+    disabled.' This is also the guide's documented mitigation for the BEAST
+    (CVE-2011-3389) and CBC-cipher scanner findings, which cannot be fixed
+    server-side any other way. Disabling them may break very old browsers, so
+    confirm client compatibility before the change window.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: web_server_profile, command: show web-server profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: web_tls12_only}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: web_tls12_only}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; web-server profile ; ssl-protocol tlsv1.2"
+  references:
+    - {guide_section: "Cryptography - HTTPS", page: 19, document: controller_2023}
+    - {guide_section: "Common False Positives - TLS/SSL", page: 17, document: controller_2023}
+
+- id: AOS8-CRYPTO-SSH-CIPHERS-001
+  title: SSH AES-CBC and HMAC-SHA1-96 disabled (scanner-finding closure)
+  category: crypto
+  severity: low
+  description: >-
+    NOT a vulnerability. The guide is explicit that scanners reporting AES-CBC and
+    HMAC-SHA1-96 as weak 'are incorrect' - truncating HMAC output bits does not
+    weaken the MAC (RFC 2104, NIST SP800-107), and SHA1 weaknesses do not carry
+    over to HMAC-SHA1. This control exists only because disabling them (available
+    since ArubaOS 6.5.4.4) is the cheapest way to close a recurring scan finding.
+    Treat a warn here as paperwork, not risk, and note that disabling AES-CBC can
+    break older SSH clients.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: show_ssh, command: show ssh}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: ssh_weak_ciphers_disabled}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: ssh_weak_ciphers_disabled}
+        then: pass
+      - else: warn
+  # hmac-sha1-96 is a MAC, not a cipher, and it has its own knob. Sending it to
+  # 'disable-ciphers' does not fail cleanly: the parser falls through to the
+  # exec-mode SSH *client*, which prompts for a password, and the next line of
+  # the block is then read as that password. Verified on 8.13.3.0.
+  remediation_hint: "configure terminal ; ssh disable-ciphers aes-cbc ; ssh disable-mac hmac-sha1-96  (scanner-appeasement only; verify your SSH clients still negotiate)"
+  references:
+    - {guide_section: "Cryptography - SSH", page: 19, document: controller_2023}
+    - {guide_section: "Common False Positives - SSH", page: 15, document: controller_2023}
+
+- id: AOS8-CRYPTO-ISAKMP-LEGACYDH-001
+  title: Legacy DH group 2 IKE policies (priority >= 10000) disabled
+  category: crypto
+  severity: medium
+  description: >-
+    ArubaOS ships two factory-default IKE policies using the 1024-bit
+    Diffie-Hellman group 2, kept only so upgrades from pre-6.4 releases keep
+    working. Researchers have argued that nation-state resources can precompute
+    1024-bit DH parameters (weakdh.org). Once every element runs ArubaOS 6.4 or
+    later these policies should be removed; ArubaOS 8.7 phases group 2 out
+    entirely in favour of group 14 and HMAC-SHA256.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: crypto_isakmp_policy, command: show crypto isakmp policy}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: isakmp_legacy_dh_disabled}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: isakmp_legacy_dh_disabled}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; no crypto isakmp policy 10001 ; no crypto isakmp policy 10002  (only once every controller and AP runs AOS >= 6.4; APs retry with DH group 14 after an INVALID_KE_PAYLOAD)"
+  references:
+    - {guide_section: "Cryptography - Diffie-Hellman", page: 20, document: controller_2023}
+
+- id: AOS8-CRYPTO-ISAKMP-STRENGTH-001
+  title: An IKEv2 policy with DH group 14 and certificate authentication exists
+  category: crypto
+  severity: medium
+  description: >-
+    Aruba recommends IKEv2 with at least 112 bits of security strength - AES-256
+    encryption, SHA-160 hash, RSA-signature authentication and Diffie-Hellman
+    group 14 (2048-bit). This checks for at least one administrator-defined policy
+    (priority below 10000) meeting that bar. CPsec and RAP termination configure
+    IPsec automatically and are not affected.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: crypto_isakmp_policy, command: show crypto isakmp policy}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: isakmp_strong_policy}
+        then: manual
+      - when: {source: fact, predicate: fact_true, arg: isakmp_strong_policy}
+        then: pass
+      - else: warn
+  remediation_hint: "configure terminal ; crypto isakmp policy 20 ; version v2 ; group 14 ; authentication RSA-sig ; exit ; crypto dynamic-map default-ikev2-dynamicmap 10000 ; set pfs group14"
+  references:
+    - {guide_section: "Cryptography - IPsec", page: 20, document: controller_2023}
+
+- id: AOS8-CRYPTO-TKIP-001
+  title: TKIP not used for Wi-Fi encryption
+  category: crypto
+  severity: high
+  description: >-
+    'Do not use TKIP for Wi-Fi encryption as it contains known security
+    weaknesses.' Any ssid-profile opmode naming TKIP (wpa-tkip, wpa2-tkip, or a
+    mixed wpa2-aes-tkip mode) keeps that weakness reachable for every client on
+    the SSID, including clients that could have negotiated AES-CCMP.
+  applicability:
+    requires_evidence: [running_config]
+  evidence:
+    - {key: wlan_ssid_profile, command: show wlan ssid-profile}
+    - {key: running_config, command: show running-config}
+  logic:
+    type: first_match
+    clauses:
+      - when: {source: fact, predicate: fact_unknown, arg: tkip_in_use}
+        then: manual
+      - when: {source: fact, predicate: fact_false, arg: tkip_in_use}
+        then: pass
+      - else: fail
+  remediation_hint: "configure terminal ; wlan ssid-profile <name> ; opmode wpa2-aes (or wpa3-aes-ccm-128) ; retire any TKIP-only clients first - they will not associate afterwards"
+  references:
+    - {guide_section: "Cryptography - Wi-Fi/WPA2", page: 19, document: controller_2023}

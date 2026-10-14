@@ -1,0 +1,133 @@
+name: cmmc_l2
+framework: CMMC 2.0 Level 2
+version: "2.0"
+description: >
+  Crosswalk of ArubaOS 8 WLAN-controller hardening controls to CMMC 2.0 Level 2
+  practices (mapped to NIST SP 800-171 Rev 2), covering the AC, IA, AU, SC, and
+  CM families a wireless LAN controller's configuration can evidence in a
+  federal / Defense Industrial Base (DIB) CUI environment.
+disclaimer: >
+  Advisory crosswalk of the WLAN-controller-configuration slice only. It is NOT a
+  CMMC certification or a C3PAO/assessor opinion. A practice shown MET here may
+  still require additional non-WLAN evidence (host, network, policy, and process
+  artifacts) to be assessed as fully implemented. Validate with a qualified
+  assessor (C3PAO) before relying on this for a CMMC assessment.
+profile: high_security
+org_profile_defaults:
+  wip_required: true          # 3.1.x / 3.14.6 monitor for unauthorized wireless
+  fips_required: true         # SC.L2-3.13.11 FIPS-validated cryptography for CUI
+requirements:
+  - id: "AC.L2-3.1.1"
+    title: Limit system access to authorized users, processes, and devices
+    controls: [AOS8-AUTH-SERVER-001, AOS8-DOT1X-001, AOS8-WLAN-001, AOS8-MGMT-LOCALAUTH-001, 
+          AOS8-ROLE-INITROLE-001]
+  - id: "AC.L2-3.1.2"
+    title: Limit system access to the transactions/functions authorized users may execute
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-DEFAULTROLE-001, AOS8-ROLE-STATEFUL-001, 
+          AOS8-ADMIN-POLICY-001, AOS8-ROLE-SRVDERIV-001]
+  - id: "AC.L2-3.1.3"
+    title: Control the flow of CUI in accordance with approved authorizations
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-NET-UNTRUSTED-PORT-001, 
+          AOS8-WLAN-VLAN-001, AOS8-ROLE-NETDEST-MEMBERSHIP-001]
+  - id: "AC.L2-3.1.5"
+    title: Employ least privilege, including for privileged accounts
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-INITROLE-001, AOS8-ADMIN-POLICY-001, 
+          AOS8-ROLE-UDP6869-DENY-001]
+  - id: "AC.L2-3.1.10"
+    title: Use session lock / session termination after inactivity
+    controls: [AOS8-GLOBAL-TIMEOUT-001, AOS8-GLOBAL-TIMEOUT-002]
+  - id: "AC.L2-3.1.13"
+    title: Employ cryptographic mechanisms to protect remote access sessions
+    controls: [AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-MGMT-SSH-VERSION-001, 
+          AOS8-MGMT-SSH-PUBKEY-001, AOS8-MGMT-CERT-001]
+  - id: "AC.L2-3.1.16"
+    title: Authorize wireless access prior to allowing such connections
+    controls: [AOS8-WLAN-001, AOS8-DOT1X-001, AOS8-AUTH-EAP-TYPE-001, AOS8-ROLE-INITROLE-001]
+  - id: "AC.L2-3.1.17"
+    title: Protect wireless access using authentication and encryption
+    controls: [AOS8-WLAN-001, AOS8-AUTH-EAP-TYPE-001, AOS8-AUTH-EAP-TLS-CERTS-001, 
+          AOS8-WLAN-FWDMODE-001]
+  - id: "AC.L2-3.1.18"
+    title: Control connection of mobile devices
+    controls: [AOS8-DOT1X-MACHINEAUTH-001, AOS8-ROLE-MACHINEROLES-001, AOS8-WIP-BLACKLIST-ENABLE-001]
+  - id: "AC.L2-3.1.20"
+    title: Verify and control/limit connections to external systems
+    controls: [AOS8-NET-UNTRUSTED-PORT-001, AOS8-NET-TRUSTED-VLAN-001, AOS8-WLAN-VAPEXCLUDE-001, 
+          AOS8-ROLE-NETDEST-MEMBERSHIP-001]
+  - id: "IA.L2-3.5.1"
+    title: Identify system users, processes, and devices
+    controls: [AOS8-AUTH-SERVER-001, AOS8-AUTH-SERVERGROUP-001, AOS8-DOT1X-001, 
+          AOS8-DOT1X-MACHINEAUTH-001]
+  - id: "IA.L2-3.5.2"
+    title: Authenticate (or verify) identities before granting access
+    controls: [AOS8-WLAN-001, AOS8-AUTH-EAP-TYPE-001, AOS8-AUTH-SERVERGROUP-NONDEFAULT-001, 
+          AOS8-AUTH-LOCALDB-DOT1X-001, AOS8-MGMT-LOCALAUTH-001]
+  - id: "IA.L2-3.5.3"
+    title: Use multifactor authentication for privileged accounts and network access
+    controls: [AOS8-AUTH-EAP-TLS-CERTS-001, AOS8-MGMT-SSH-PUBKEY-001, AOS8-MGMT-WEBUI-CERTAUTH-001]
+  - id: "IA.L2-3.5.4"
+    title: Employ replay-resistant authentication mechanisms for network access
+    controls: [AOS8-AUTH-EAP-TYPE-001, AOS8-AUTH-EAP-TLS-CERTS-001, AOS8-WLAN-001]
+  - id: "IA.L2-3.5.7"
+    title: Enforce minimum password complexity for new/changed passwords
+    controls: [AOS8-MGMT-PWDPOL-001, AOS8-INIT-001]
+  - id: "IA.L2-3.5.10"
+    title: Store and transmit only cryptographically-protected passwords
+    controls: [AOS8-AUTH-LDAP-LDAPS-001, AOS8-AUTH-TACACS-SESSIONAUTH-001, 
+          AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-GLOBAL-SNMP-001]
+  - id: "AU.L2-3.3.1"
+    title: Create and retain system audit logs and records
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-MGMT-LOGCOPY-001]
+  - id: "AU.L2-3.3.7"
+    title: Synchronize internal system clocks to an authoritative time source
+    controls: [AOS8-GLOBAL-NTP-001, AOS8-INIT-CLOCK-001, AOS8-INIT-TIMEZONE-001]
+  - id: "AU.L2-3.3.8"
+    title: Protect audit information and logging tools from unauthorized access/modification
+    controls: [AOS8-GLOBAL-SYSLOG-001, AOS8-ADMIN-POLICY-001, AOS8-ADMIN-POLICY-002]
+  - id: "CM.L2-3.4.1"
+    title: Establish and maintain baseline configurations
+    controls: [AOS8-INIT-STARTUP-001, AOS8-INIT-PERSIST-001, AOS8-MGMT-BACKUP-001, AOS8-INIT-002, 
+          AOS8-INIT-ROLE-001]
+  - id: "CM.L2-3.4.2"
+    title: Establish and enforce security configuration settings
+    controls: [AOS8-INIT-NEGATE-001, AOS8-GLOBAL-BANNER-001, AOS8-INIT-COUNTRY-001, 
+          AOS8-WLAN-DEFGROUP-001, AOS8-AP-GROUP-001]
+  - id: "CM.L2-3.4.6"
+    title: Employ least functionality (essential capabilities only)
+    controls: [AOS8-NET-PORT-001, AOS8-NET-IPV6-DISABLED-001, AOS8-GLOBAL-STP-001, 
+          AOS8-GLOBAL-LCD-001, AOS8-MGMT-FILETRANSFER-SCP-001]
+  - id: "CM.L2-3.4.7"
+    title: Restrict, disable, or prevent nonessential programs, ports, protocols, and services
+    controls: [AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001, AOS8-MGMT-SSH-VERSION-001, 
+          AOS8-GLOBAL-SNMP-001, AOS8-NET-DEFAULTVLAN-001, AOS8-MGMT-FILETRANSFER-SCP-001]
+  - id: "SC.L2-3.13.1"
+    title: Monitor, control, and protect communications at system boundaries
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-NET-UNTRUSTED-PORT-001, AOS8-ROLE-STATEFUL-001, 
+          AOS8-ROLE-ORPHAN-POLICY-001, AOS8-ADMIN-POLICY-002]
+  - id: "SC.L2-3.13.5"
+    title: Implement subnetworks for publicly accessible system components
+    controls: [AOS8-NET-VLAN-SEGMENT-001, AOS8-WLAN-VLAN1-001, AOS8-NET-DEFAULTVLAN-001, 
+          AOS8-NET-CTRLIP-001, AOS8-WLAN-VLAN-001]
+  - id: "SC.L2-3.13.6"
+    title: Deny network traffic by default and allow by exception (deny-all, permit-by-exception)
+    controls: [AOS8-ROLE-POLICY-001, AOS8-ROLE-INITROLE-001, AOS8-ROLE-NETDEST-MEMBERSHIP-001, 
+          AOS8-ROLE-UDP6869-DENY-001]
+  - id: "SC.L2-3.13.8"
+    title: Implement cryptographic mechanisms to protect CUI in transit
+    controls: [AOS8-WLAN-001, AOS8-AUTH-EAP-TYPE-001, AOS8-WLAN-FWDMODE-001, 
+          AOS8-AUTH-LDAP-LDAPS-001, AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001]
+  - id: "SC.L2-3.13.11"
+    title: Employ FIPS-validated cryptography to protect CUI
+    controls: [AOS8-GLOBAL-FIPS-001, AOS8-MGMT-CSR-001, AOS8-MGMT-CERT-IMPORT-001]
+  - id: "SC.L2-3.13.15"
+    title: Protect the authenticity of communications sessions
+    controls: [AOS8-MGMT-CERT-001, AOS8-MGMT-TRUSTEDCA-001, AOS8-AUTH-EAP-TLS-CERTS-001, 
+          AOS8-NET-VRRP-AUTH-001]
+  - id: "SI.L2-3.14.6"
+    title: Monitor systems to detect attacks and unauthorized connections (wireless IDS)
+    controls: [AOS8-WIP-ROGUE-DETECT-001, AOS8-WIP-LIC-001, AOS8-WIP-CONTAINMENT-001, 
+          AOS8-WIP-AM-001, AOS8-WIP-MASTER-001, AOS8-WIP-DASHBOARD-001]
+  - id: "PE.L2-3.10.1"
+    title: Limit physical access to systems, equipment, and operating environments
+    controls: [AOS8-PHYS-INSTALL-001, AOS8-PHYS-CONSOLE-001, AOS8-PHYS-TEL-001, AOS8-PHYS-SECKIT-001,
+      AOS8-GLOBAL-LCD-001]

@@ -1,0 +1,38 @@
+# AOS8 returns human-readable text (not non-zero exit codes) when a command is
+# denied, unsupported, or errors. These substrings (matched case-insensitively)
+# let the collector classify each result's exit_kind. The classifier strips
+# banners/quoted names and gates large outputs to %/error-prefixed lines, so
+# these substrings will not over-match config text. Signatures drift across
+# trains / MM-vs-standalone — validate against real captures.
+
+denied:
+  - "you do not have permission"
+  - "access denied"
+  - "permission denied"
+  - "not authorized"
+  - "you are not allowed"
+  - "is not permitted"
+  - "command authorization failed"
+
+unsupported:
+  - "parse error"
+  - "invalid input"
+  - "unrecognized command"
+  - "% invalid"
+  - "ambiguous command"
+  - "incomplete command"
+  - "unknown command"
+  - "not supported"
+  - "is not supported"
+  - "only available on"
+  - "only supported on"
+  - "module not loaded"
+
+# Kept deliberately narrow ('error:' with a colon) so interface counters like
+# "internal error count: 0" do not trip a false ERROR.
+error:
+  - "error:"
+
+# Lines that are pure prompt/pager noise; ignored when deciding EMPTY.
+noise_prefixes:
+  - "--More--"

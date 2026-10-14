@@ -1,0 +1,1193 @@
+# Per-control REMEDIATION disruption ratings.
+#
+# The audit is read-only and never disruptive. These ratings describe how
+# disruptive APPLYING each control's fix is, so operators can plan change windows.
+#   level: none   = hot change, no impact
+#   level: low    = management-plane only (your own admin session may reconnect)
+#   level: medium = brief data-plane impact (wireless clients reauth, or AP reboot)
+#   level: high   = controller reboot / outage, or broad client/AP downtime
+# Flags: reboot_required, client_impact (wireless clients reauth), ap_impact (AP
+# reboots), mgmt_plane_only. detail = plain-language description incl. any RISK.
+#
+# Advisory planning guidance for ArubaOS 8; verify against your change process.
+
+defaults:
+  level: low
+  reboot_required: false
+  client_impact: false
+  ap_impact: false
+  mgmt_plane_only: true
+  detail: Management-plane configuration change; no client or AP impact.
+impacts:
+  AOS8-ADMIN-POLICY-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Creating the netdestinations and admin-only session ACL is management-plane object config only and has no effect on traffic until the policy is actually applied to a port (see ADMIN-POLICY-002).
+  AOS8-ADMIN-POLICY-002:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: 'Applying the admin-only session ACL with ''ip access-group ... session'' affects only management access; RISK: omitting your own mgmt host from the permit list locks you out of HTTPS/SSH/SNMP
+      on that port, so verify the ACL includes your host first.'
+  AOS8-AP-GROUP-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: Reassigning APs out of 'default' into purpose-built groups triggers an AP reboot per moved AP, dropping clients on those APs until they re-associate (no controller outage).
+  AOS8-AP-NAME-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: ap-rename requires the renamed AP to reboot before the new name applies, so that AP's clients drop briefly during the reboot.
+  AOS8-AP-REGROUP-REBOOT-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: ap-regroup auto-reboots each reassigned AP (queued until it reconnects if offline), so clients on those APs drop during the reboot; schedule in a maintenance window.
+  AOS8-AP-RENAME-REBOOT-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: An AP rename requires that AP to reboot for the name to take effect, dropping its clients briefly; schedule during low/no client traffic.
+  AOS8-AP-VAP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Manual topology/intent review of VAP-to-AP-group mappings changes nothing by itself; note that actually adding/removing a VAP from an AP group would cause a client-reauth/AP-profile-reload (medium)
+      at that location.
+  AOS8-AUTH-EAP-TLS-CERTS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Importing a server certificate and trusted CA for EAP-TLS is a control-plane PKI install; it has no effect on connected clients until supplicants/RADIUS actually switch to EAP-TLS.
+  AOS8-AUTH-EAP-TYPE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Attestation only: EAP type (PEAP/EAP-TLS) is negotiated on the RADIUS server and supplicants, transparent to the controller, so nothing changes on the box.'
+  AOS8-AUTH-LDAP-LDAPS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Switching the LDAP server to authport 636 (LDAPS) is a control-plane edit; affects management/captive-portal auth lookups only, no wireless client or AP impact.
+  AOS8-AUTH-LOCALDB-DOT1X-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Moving the dot1x-server-group off the internal local DB to external RADIUS changes the active 802.1X auth source, so connected clients reauthenticate against the external server.
+  AOS8-AUTH-RADIUS-CLIENTREG-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Attestation only: confirming the controller is a NAS/client and the shared secret matches is done on the RADIUS server, nothing changes on the controller.'
+  AOS8-AUTH-RADIUS-PORTS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting explicit authport 1812 / acctport 1813 on a RADIUS server is a control-plane edit; in-flight RADIUS auth/acct may briefly retry to the new ports but no client/AP outage.
+  AOS8-AUTH-SERVER-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Adding and enabling an external RADIUS/LDAP/TACACS server is a control-plane addition; it only affects auth once bound into a server group, no client/AP impact on creation.
+  AOS8-AUTH-SERVERGROUP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Defining an AAA server-group and adding an auth-server member is an inert control-plane addition until something references the group; no client/AP impact on creation.
+  AOS8-AUTH-SERVERGROUP-NONDEFAULT-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Re-pointing dot1x-server-group from internal/default to an external RADIUS group changes the live 802.1X auth path, so connected clients on that AAA profile reauthenticate against the new server.
+  AOS8-AUTH-TACACS-SESSIONAUTH-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Enabling TACACS+ session-authorization affects only administrator management sessions (per-command/role authz); no data-plane or AP impact.
+  AOS8-DOT1X-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Adding/completing the 802.1X auth profile, server group, and default role on a live AAA profile changes client authentication and role assignment, forcing connected clients on that SSID to reauthenticate.
+  AOS8-DOT1X-MACHINEAUTH-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Enabling machine-authentication tightens the 802.1X handshake and role derivation, so clients on the affected SSID reauthenticate (and any device failing machine-auth may be moved to a restricted
+      role).
+  AOS8-GLOBAL-BANNER-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting the MOTD/login banner text is a hot config line with zero effect on the data plane or any existing session.
+  AOS8-GLOBAL-FIPS-001:
+    level: high
+    reboot_required: true
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: '''fips enable'' requires write memory + reload, so the controller reboots and all APs/clients drop during the outage.'
+  AOS8-GLOBAL-LCD-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Disabling the 72xx front-panel LCD menu (lcd-menu / disable menu) is a hot management change with no service impact.
+  AOS8-GLOBAL-NTP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Adding an authenticated NTP server is a management-plane change, but RISK: a large BACKWARD clock correction can disable licensed modules until time recovers.'
+  AOS8-GLOBAL-SNMP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Removing SNMPv1/v2c communities and configuring an SNMPv3 user is management-plane only; existing NMS polling via the old community will stop until reconfigured.
+  AOS8-GLOBAL-STP-001:
+    level: high
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: 'RISK: ''no spanning-tree'' removes loop protection; if any redundant L2 path exists it can cause a bridging loop / broadcast storm that takes down the whole L2 domain. Rated high (worst case); only apply after confirming no loop potential, and prefer leaving STP enabled.'
+  AOS8-GLOBAL-SYSLOG-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Adding an external 'logging <ip>' target starts forwarding logs with no impact on sessions, clients, or APs.
+  AOS8-GLOBAL-TIMEOUT-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting 'loginsession timeout' only governs future idle CLI sessions; no data-plane or current-session impact.
+  AOS8-GLOBAL-TIMEOUT-002:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting the web-server profile session-timeout is management-plane only; your own WebUI session simply re-prompts after the new idle limit.
+  AOS8-INIT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: Changing the default admin password is management-plane only; RISK of self-lockout if the new credentials are mistyped, so verify before logging out and keep an emergency account.
+  AOS8-INIT-002:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting a non-default hostname is a cosmetic CLI-prompt change with no service impact.
+  AOS8-INIT-CLOCK-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Manually setting the clock is a point-in-time mgmt action; RISK: a large BACKWARD time jump disables licensed modules until the clock recovers.'
+  AOS8-INIT-CONSOLE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Serial terminal-emulator settings (9600 8-N-1) live on the operator workstation, not the controller, so applying them changes nothing on the box.
+  AOS8-INIT-COUNTRY-001:
+    level: high
+    reboot_required: true
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: The country code is locked after the Startup Script, so changing it requires 'write erase all' + full re-provision and reboot, dropping all APs and clients.
+  AOS8-INIT-COUNTRY-002:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: This is an attestation that the existing (immutable) country code matches the site's regulatory authorization; confirming a correct value changes nothing on the box.
+  AOS8-INIT-NEGATE-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Negating stale config with the 'no' form is generally management-plane cleanup; verify removed objects (e.g. an unused user-role) are truly unreferenced before deleting.
+  AOS8-INIT-PERSIST-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: '''write memory'' just persists already-running config to flash; nothing on the live data or control plane changes.'
+  AOS8-INIT-ROLE-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Remediation is verifying the switch-role matches design; merely confirming it is non-disruptive, though actually changing role is a Startup-Script-level rebuild (out of scope here).
+  AOS8-INIT-STARTUP-001:
+    level: high
+    reboot_required: true
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: Completing the Startup Script (post factory/write-erase) reboots the controller on acceptance, taking the box, APs, and clients offline during the rebuild.
+  AOS8-INIT-TIMEZONE-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting 'clock timezone' is a hot management-plane change affecting only displayed/log timestamps; no data-plane impact.
+  AOS8-LIC-BACKUP-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Manual pre-change action ('backup flash' + 'license export', copy off-box) reads/exports state without altering any live configuration.
+  AOS8-LIC-CAPACITY-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: License capacity/sizing planning is an off-device intent review; performing it changes nothing on the controller.
+  AOS8-LIC-CLOCK-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Anchoring the clock to trusted NTP and restricting clock access is management-plane only; CAUTION: a LARGE BACKWARD clock change disables software-licensed modules and their features, so never
+      roll the clock back.'
+  AOS8-LIC-COUNTS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing additional AP/PEFNG/RFProtect license keys to equalize counts is a hot management-plane operation that raises the active-AP cap; APs/clients are not interrupted by adding capacity
+      licenses.
+  AOS8-LIC-DEVICEMATCH-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Confirming installed keys were generated for this device's serial is an off-device records reconciliation that changes nothing on the box.
+  AOS8-LIC-EVAL-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing a permanent/subscription license to replace an evaluation key is a hot management-plane operation; the licensed feature keeps running, so no client/AP/data-plane interruption.
+  AOS8-LIC-EXPIRED-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Expired evaluation entries are benign and have no operational impact; the remediation only confirms/documents the lapse (true removal needs 'write erase all', which is out of scope of this control),
+      so applying it changes nothing live.
+  AOS8-LIC-MASTERLOCAL-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing matching feature licenses on the master and backup master is a hot management-plane operation; adding licenses does not interrupt locals' APs or clients.
+  AOS8-LIC-MM-POOL-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing licenses on the Mobility Master and assigning them to managed-group pools is an MM-side management-plane operation; pool assignment grants capacity without rebooting controllers or
+      dropping clients.
+  AOS8-LIC-PEFV-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing the PEFV/PEFNG firewall license is a hot management-plane operation that enables role-based policy enforcement; adding the license itself does not reauth clients (the firewall policies
+      that depend on it would govern traffic once active).
+  AOS8-LIC-RECORDS-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Registering license assets on the Aruba portal is an off-device records task that changes nothing on the controller.
+  AOS8-LIC-RESET-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Operator awareness item (reboot/'write erase' preserve licenses; 'write erase all' wipes the DB); applying the control is knowledge/documentation and changes nothing live.
+  AOS8-MGMT-BACKUP-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Manual action: ''backup flash''/''backup config'' and copy off-box via SCP read state and produce archives without changing any live configuration on the controller.'
+  AOS8-MGMT-CERT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Importing a CA-issued cert and pointing the web-server profile switch-cert at it is management-plane only; the HTTPS WebUI service re-handshakes so your own admin browser session reconnects
+      briefly, with no client/AP impact.
+  AOS8-MGMT-CERT-IMPORT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Importing server/CA/client certs via the WebUI adds PKI material to flash (management-plane); nothing on the data plane changes until a profile is pointed at the cert.
+  AOS8-MGMT-CERT-INVENTORY-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Point-in-time review of installed certificates ('show crypto-local pki') changes nothing on the box.
+  AOS8-MGMT-CSR-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Generating a CSR with an approved key type is a management-plane action that produces a request file only; no service is affected until the signed cert is later imported and bound.
+  AOS8-MGMT-FILETRANSFER-SCP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Switching image/config/backup/log transfers from TFTP/FTP to SCP changes only how management files move on the management plane; no client, AP, or data-plane impact.
+  AOS8-MGMT-IMAGE-TRANSFER-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Copying an ArubaOS image to a system partition via SCP only stages the file on flash (management-plane); it does not boot the image, so no reboot or outage occurs here (the subsequent upgrade/boot
+      would).
+  AOS8-MGMT-LOCALAUTH-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: '''no mgmt-user localauth'' is management-plane only, but carries a self-lockout RISK: if the external auth server is unreachable you lose all admin access, so keep an emergency-access policy/account
+      before applying.'
+  AOS8-MGMT-LOGCOPY-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Manual action: ''tar logs'' and copy off-box via SCP reads and exports log archives without altering any live configuration.'
+  AOS8-MGMT-PWDPOL-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Enabling the mgmt password policy (min-length 15, complexity, lockout) affects only admin account management; no client/AP/data-plane impact (existing passwords are enforced on next change).
+  AOS8-MGMT-RESTORE-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: This control documents the correct restore procedure (unselect save-before-reboot); applying the guidance changes nothing live, though an actual config restore would itself require a reboot.
+  AOS8-MGMT-SSH-DISABLE-INSECURE-MGMT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: '''no telnet cli/soe'' and forcing HTTPS-only is management-plane only; self-lockout RISK if you are currently managing via Telnet/HTTP, so confirm SSHv2/HTTPS access first.'
+  AOS8-MGMT-SSH-PUBKEY-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: Enabling 'ssh mgmt-auth public-key' is management-plane only; self-lockout RISK if the wrong/missing public key is mapped, so verify key-based login on a second session before disabling password
+      auth.
+  AOS8-MGMT-SSH-VERSION-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Removing any SSHv1 fallback (AOS 8 is SSHv2 by default) is management-plane only and affects only the SSH daemon; no client/AP/data-plane impact.
+  AOS8-MGMT-TRUSTEDCA-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Importing the issuing/intermediate CA as a trustedCA adds validation material on the management plane; nothing changes for clients or APs until a profile actually uses it.
+  AOS8-MGMT-WEBUI-CERTAUTH-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: Enabling 'mgmt-auth certificate' on the web-server profile is management-plane only; self-lockout RISK if the trusted-CA/client-cert serial mapping is wrong, so keep a fallback admin path before
+      applying.
+  AOS8-MGMT-WEBUI-SESSLIMIT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting the web-server session-limit (<=22) affects only concurrent WebUI admin sessions; no client/AP/data-plane impact.
+  AOS8-NET-CTRLIP-001:
+    level: high
+    reboot_required: true
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: Changing controller-ip to a dedicated VLAN/loopback requires a controller reboot (per the remediation_hint), during which all APs drop and clients go down until the controller comes back.
+  AOS8-NET-DEFAULTVLAN-001:
+    level: medium
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Issuing 'no ip address'/'shutdown' on the VLAN 1 SVI briefly disrupts anything still using VLAN 1; if controller-ip is currently on VLAN 1 it must first be moved off (that move is the reboot
+      covered by AOS8-NET-CTRLIP-001).
+  AOS8-NET-GW-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: Setting 'ip default-gateway' is a control-plane/management change with no client or AP data-plane impact (a wrong gateway only affects controller-originated reachability).
+  AOS8-NET-IPV6-DISABLED-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: '''no ipv6 enable'' removes IPv6 processing; the control is gated to deployments where IPv6 is not required, so no production IPv6 client/data path is affected.'
+  AOS8-NET-IPV6-ENABLED-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: '''ipv6 enable'' simply turns on IPv6 processing and is a hot, additive change with no impact on existing IPv4 clients, APs, or controller stability.'
+  AOS8-NET-MGMTIF-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Replacing the factory-default 172.16.0.254 with the site IP on the mgmt VLAN SVI is a management-plane address change; your own admin session may briefly reconnect on the new IP but clients/APs
+      are unaffected.
+  AOS8-NET-NATIVEVLAN-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: This is a manual trunk native-VLAN review; if a native-VLAN reassignment is actually applied it causes only a brief blip on that trunk's untagged traffic, but the control itself changes nothing
+      on the box.
+  AOS8-NET-PORT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Shutting down genuinely unused ports has no traffic impact; RISK is only if 'unused' is misjudged and an in-use uplink/AP port is disabled, so confirm against the port plan first.
+  AOS8-NET-PORTMODE-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Manual review of access/trunk mode and allowed-VLAN lists; applying a mode or allowed-VLAN change would cause a brief data-plane blip on that port, but the control as written is a topology review
+      with no automatic change.
+  AOS8-NET-TRUSTED-VLAN-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Removing a guest/untrusted VLAN from the trusted list forces its traffic through the session ACL/firewall (e.g. captive portal), so devices on that VLAN immediately lose any access the new policy
+      now denies.
+  AOS8-NET-UNTRUSTED-PORT-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: '''no trusted'' plus a session ACL on an untrusted-facing port forces that port''s traffic through the policy, so devices behind it lose any access the ACL now denies until the policy is tuned.'
+  AOS8-NET-VLAN-SEGMENT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Defining additional VLANs is a management-plane change with no impact until ports/VAPs are re-mapped to them; no client or AP moves traffic merely by creating the VLAN.
+  AOS8-NET-VLAN-STATICIP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Assigning a static IP to a non-default VLAN SVI is a management-plane address add with no client/AP data-plane impact.
+  AOS8-NET-VRRP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Configuring VRRP (id, VIP, authentication, no shutdown) is a control-plane redundancy add and does not disrupt existing client or AP data paths.
+  AOS8-NET-VRRP-AUTH-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting a strong VRRP authentication string is a control-plane change; it may briefly cause VRRP peers to renegotiate mastership but does not interrupt the client/AP data plane.
+  AOS8-PHYS-CO-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Designating a Crypto Officer and confirming documented procedures were followed is a purely administrative attestation that changes nothing on the running controller.
+  AOS8-PHYS-CONSOLE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Setting the terminal emulator to 9600 8-N-1 and restricting physical console access is done on the operator's terminal/facility, not on the controller, so it has zero impact on clients, APs,
+      or service.
+  AOS8-PHYS-INSTALL-001:
+    level: high
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Meeting physical install prerequisites (rack/clearance/power/environment, anti-static handling) is an initial-install power-down operation, so applying it to a deployed unit means taking that
+      controller fully offline (all its APs/clients drop).
+  AOS8-PHYS-MOUNT-001:
+    level: high
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Installing the correct rack brackets/feet and power cord requires physically mounting (and thus powering down) the chassis, causing a full outage of that controller and its served APs/clients.
+  AOS8-PHYS-RECEIVE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Inspecting the shipping carton for tamper evidence on receipt happens before install and never touches a live controller, so there is no operational impact.
+  AOS8-PHYS-SECKIT-001:
+    level: high
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Installing the FIPS 140-2 Level 2 Security Kit (modified hardware) requires the chassis powered down and handled, taking that controller fully offline along with its APs/clients.
+  AOS8-PHYS-TEL-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Applying the required TELs and recording each position+serial (24h cure) is an external in-place operation on the chassis surface that does not touch the data plane or reboot anything, though
+      it does require physical access to the unit.
+  AOS8-PHYS-TELLID-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Applying the 15+ chassis-lid-seam TELs to a 7200 is an external label-application on the case exterior performed in place, with no power-down, reboot, or client/AP impact.
+  AOS8-PHYS-TELLOG-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Following the TEL application procedure and recording the security log is in-place label application plus documentation; the physical labeling has no data-plane or reboot impact.
+  AOS8-PHYS-TELMOD-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Applying TELs spanning the power supplies and fan tray to the chassis is external label placement done in place; it does not require pulling those modules, so there is no service impact.
+  AOS8-PHYS-TELPORT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Applying two TELs over the unused RJ-45 and mini-USB serial ports is external label placement on idle ports, with no reboot or client/AP impact (note it seals those ports against future use).
+  AOS8-PHYS-TELREAD-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Visually inspecting applied TELs and matching their serial numbers to the security log is a read-only physical inspection that changes nothing on the unit.
+  AOS8-PHYS-TELSPARE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Storing spare TELs securely and tracking their use is an inventory/records procedure off the box with no operational impact.
+  AOS8-ROLE-DEFAULTROLE-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Setting dot1x-default-role to a defined authenticated role re-applies the AAA profile so authenticated wireless clients reauthenticate and pick up the new role.
+  AOS8-ROLE-INITROLE-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Tightening the initial (pre-auth) role re-applies the AAA profile and re-roles connected pre-auth clients, who lose any now-denied access (e.g. captive-portal-only) until they re-authenticate.
+  AOS8-ROLE-MACHINEROLES-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Defining machine-default and user-default roles changes the role assigned on machine-auth outcomes, so affected 802.1X clients reauthenticate into the constrained role.
+  AOS8-ROLE-NETDEST-MEMBERSHIP-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Editing a netdestination alias to drop a 0.0.0.0/0 member is a management/control-plane config change with no client/AP reboot, though it does narrow what policies referencing the alias permit.
+  AOS8-ROLE-ORPHAN-POLICY-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Binding a previously orphaned session policy onto a user-role applies new firewall rules to connected users in that role, who may lose now-denied traffic.
+  AOS8-ROLE-POLICY-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Replacing an 'any any any permit' with least-privilege rules tightens the user-role firewall so connected users immediately lose access to anything no longer explicitly permitted.
+  AOS8-ROLE-POLICYTYPE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Informational review of whether user/admin policies use the session (stateful) type; the review changes nothing on the box (acting on it would be covered by ROLE-STATEFUL-001).
+  AOS8-ROLE-SRVDERIV-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Adding server-group 'set role'/'set vlan' derivation rules changes the role (or VLAN) granted on full auth, so affected clients reauthenticate into the server-derived role.
+  AOS8-ROLE-STATEFUL-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Converting role traffic control from standard/extended ACLs to a stateful 'ip access-list session' policy reapplies the user-role's data-plane filtering and can briefly drop/re-evaluate connected
+      users' sessions.
+  AOS8-ROLE-UDP6869-DENY-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Inserting a leading 'user any udp 68 69 deny' into the administrative access (session) policy on the mgmt ports is a management-plane edit affecting only DHCP/bootp from the mgmt host, not wireless
+      data-plane clients.
+  AOS8-ROLE-USERDERIV-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: The fix is auditing 'aaa derivation-rules user' precedence (management-plane review); if you actually change a MAC/OUI/SSID pre-auth rule, matching clients would re-role, but the recommended
+      action here is the review itself.
+  AOS8-WIP-AM-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: Creating an AM-only group and assigning APs converts those APs to Air-Monitor mode, which reboots them and stops them serving clients, causing coverage loss on the moved radios.
+  AOS8-WIP-BLACKLIST-ENABLE-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Enabling 'blacklist' in the AAA profile re-applies the profile to its virtual-APs, causing clients on the affected SSIDs to briefly reauthenticate.
+  AOS8-WIP-BLACKLIST-PERSIST-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Manual attestation confirming blacklist persistence across reboot and user-DB export/import; verifying it changes nothing on the live box.
+  AOS8-WIP-BLACKLIST-TIME-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Setting the blacklist-time duration is a management-plane parameter change that only affects how long future blacklisted clients stay barred; it does not deauth current clients or reboot APs.
+  AOS8-WIP-CLASSRULES-LIC-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing RFProtect to license AP classification rules applies hot (no reboot), and the alternative of relying on non-rule classification is a control-plane change; no client/AP impact.
+  AOS8-WIP-CONTAINMENT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Enabling rogue/wired containment in the IDS profile is a control-plane change that begins deauthing detected rogues only; legitimate clients and APs are not rebooted or dropped.
+  AOS8-WIP-DASHBOARD-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Informational point-in-time review of rogue/interfering AP counts and the client blacklist; reviewing the dashboard changes nothing on the box.
+  AOS8-WIP-LIC-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Installing the RFProtect license is a management-plane action that applies hot (RFProtect does not require a reboot), with no client or AP impact.
+  AOS8-WIP-MASTER-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Binding an ids-profile and wms general/local profile on the master is a control-plane WIP change applied to APs/AMs without rebooting them or deauthenticating clients.
+  AOS8-WIP-ROGUE-DETECT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Configuring and binding an ids general/unauthorized-device profile for rogue detection is a control-plane change; APs start classifying rogues without a reboot or client disruption.
+  AOS8-WIP-TARPIT-LIC-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: Remediation is installing the RFProtect license (applies hot, no reboot) or switching to non-Tarpit containment in the IDS profile (control-plane), neither of which reboots APs or drops clients.
+  AOS8-WLAN-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Changing the SSID opmode from open/PSK to wpa2-aes (WPA2-Enterprise) is a security-mode change, so every client on that SSID is deauthenticated and must reauthenticate with new credentials.
+  AOS8-WLAN-DEFGROUP-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: Removing a virtual-AP from ap-group 'default' and re-binding it to a purpose-built group reconfigures the broadcasting APs, dropping clients on that SSID (APs serving 'default' may reload their
+      profile).
+  AOS8-WLAN-FWDMODE-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Changing a virtual-AP forward-mode (e.g. bridge/split-tunnel to tunnel) re-establishes the VAP's data path, so connected clients on that SSID reauthenticate.
+  AOS8-WLAN-HIDESSID-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Setting hide-ssid/deny-bcast on the SSID profile re-applies the profile to the radios, briefly bouncing clients on that SSID (and they must connect by manual SSID entry afterward).
+  AOS8-WLAN-SRVDERIVE-001:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Pure review/intent control: inspecting existing server-derived ''set role condition'' rules for correct precedence changes nothing on the live box.'
+  AOS8-WLAN-UNIQUENAMES-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Creating uniquely named VAP/SSID/AAA profiles and re-binding production WLANs off the shared 'default' profiles re-applies the WLAN, so clients on the affected SSID reauthenticate.
+  AOS8-WLAN-VAPEXCLUDE-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Adding 'excluded-virtual-ap' to suppress a sensitive SSID on exposed APs removes that SSID from those radios, dropping any clients currently on it at those locations.
+  AOS8-WLAN-VLAN-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: This is a manual VLAN-assignment review; if the review leads to actually re-binding a VAP's vlan, that becomes a medium client-reauth/VLAN blip, but confirming intent alone changes nothing.
+  AOS8-WLAN-VLAN1-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: Moving a production virtual-AP off vlan 1 to a dedicated user VLAN changes the VAP's user-VLAN binding, so connected clients on that SSID reauthenticate and re-DHCP into the new VLAN.
+  # --- Advisory (PSIRT) workaround remediations ---
+  ADV-MGMT-RESTRICT:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: 'Restricting CLI/WebUI to a dedicated management VLAN and applying an admin-only session ACL is management-plane only; self-lockout RISK if your own management host is omitted from the permit list, so verify the ACL includes your host before applying.'
+  ADV-CPSEC:
+    level: medium
+    reboot_required: false
+    client_impact: false
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: 'Enabling Control-Plane Security makes APs build certificate-secured tunnels to the controller; campus APs re-establish their control channel (and any AP not in the allowed/auto-cert list will not come up until whitelisted), so stage during a maintenance window. Clients are not directly deauthenticated but lose service on any AP that drops while re-securing.'
+  ADV-PAPI-8211:
+    level: medium
+    reboot_required: false
+    client_impact: false
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: 'Blocking UDP/8211 (PAPI) from untrusted networks is a firewall/ACL change on the control plane; permit APs and peer controllers explicitly. RISK: an over-broad block severs the AP<->controller control channel and brings those APs (and their clients) down, so scope the permit set first.'
+  ADV-PAPI-8444:
+    level: medium
+    reboot_required: false
+    client_impact: false
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: 'Limiting UDP/8444 to trusted infrastructure is a firewall policy change; permit managed APs and peer controllers. RISK: blocking it too broadly disrupts the control/management channel to APs, so verify the trusted set before enforcing.'
+  ADV-ENHANCED-PAPI:
+    level: high
+    reboot_required: false
+    client_impact: false
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: 'Enabling Enhanced PAPI Security with a non-default key re-keys AP<->controller PAPI and must be coordinated across all controllers and APs; APs that have not received the new key lose their control channel until updated, so plan a maintenance window and engage HPE Aruba support.'
+  ADV-RADIUS-RADSEC:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'Moving RADIUS to RadSec (TLS) / EAP-TLS is a control-plane transport change between the controller and RADIUS; in-flight auth may briefly retry over the new transport, but wireless clients and APs are not deauthenticated by the change itself.'
+  ADV-WIFI-GROUPFRAMEBLOCK:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: 'Enabling group-frame-block re-applies the affected SSID profile to its radios, so clients on that Passpoint SSID briefly reauthenticate.'
+  ADV-WIFI-MFP:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: 'Enabling Management Frame Protection (802.11w) / denylist-sco re-applies the SSID/AAA profile, so clients on the affected SSID reauthenticate; legacy clients that do not support 802.11w may fail to associate if it is set to required.'
+  ADV-WIFI-BCASTARP:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: 'broadcast-filter ARP is on by default in AOS-8.x; (re)enabling it converts broadcast ARP to unicast and has negligible client impact (verify it was not explicitly disabled).'
+  ADV-WIFI-ENFORCEDHCP:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: 'Enabling enforce-DHCP re-applies the VAP/AAA profile and requires clients to obtain addressing via DHCP; statically addressed clients on that SSID lose connectivity until they DHCP, and clients on the SSID briefly reauthenticate.'
+  ADV-PHYSICAL:
+    level: none
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: 'Restricting physical access to the controller is an administrative/facility control with no configuration change and no service impact.'
+  ADV-AAA-USER-DELETE:
+    level: low
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "Running 'aaa user delete <user>' on deactivation forcibly disconnects only that one user's session; no other client, AP, or controller-wide impact."
+  ADV-PATCH-ONLY:
+    level: high
+    reboot_required: true
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: 'These CVEs have no configuration workaround on AOS-8 — remediation is upgrading to a fixed ArubaOS release, which reboots the controller (and its APs/clients drop during the upgrade outage). Plan a maintenance window.'
+  # --- ArubaOS 8 Controller Hardening Guide (rev 10, 2023) controls -----------
+  AOS8-CRYPTO-WEBCIPHERS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: "Resetting the cipher suite list restarts the HTTPS listener; open WebUI sessions reconnect. No client or AP impact. RISK: 'no cipher-suite' returns the server to GCM-only defaults, so a management station or API client that can only negotiate a non-GCM suite loses WebUI access. Check what the suite list currently holds before clearing it — the fix discards the whole list rather than removing the weak entries."
+  AOS8-CRYPTO-TLS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: "Setting 'ssl-protocol tlsv1.2' restarts the HTTPS listener. RISK: browsers and management tools that cannot negotiate TLS 1.2 lose WebUI access entirely — verify every admin workstation and any API/NMS integration first. Captive-portal clients on very old devices may also fail."
+  AOS8-CRYPTO-SSH-CIPHERS-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: "'ssh disable-ciphers' affects only new SSH sessions; existing sessions are unaffected. RISK: an SSH client or automation tool that only offers aes-cbc/hmac-sha1-96 can no longer connect. Note this fix closes a scanner finding rather than a real weakness."
+  AOS8-CRYPTO-ISAKMP-LEGACYDH-001:
+    level: medium
+    reboot_required: false
+    client_impact: false
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: "Removing the legacy DH group 2 IKE policies renegotiates IPsec. APs still on pre-6.4 code (or that cannot fall back to group 14) drop their tunnels and reconnect, taking their clients with them. Confirm every controller and AP runs ArubaOS 6.4 or later first."
+  AOS8-CRYPTO-ISAKMP-STRENGTH-001:
+    level: medium
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "Adding an IKEv2 / group 14 / RSA-sig policy is additive, but any site-to-site or RAP peer that cannot match the new proposal renegotiates and may fail to re-establish. Stage per peer and confirm certificate-based authentication is provisioned on both ends."
+  AOS8-CRYPTO-TKIP-001:
+    level: high
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "Changing an ssid-profile opmode away from TKIP deauthenticates every client on that SSID, and TKIP-only legacy devices (older barcode scanners, medical and industrial gear) will never reassociate. Inventory the client base before the change window."
+  AOS8-FW-IPSPOOF-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "'prohibit-ip-spoofing' is a hot change, but traffic from any client whose IP does not match its user-table entry starts being dropped — commonly seen with clients that change address without re-DHCP or with unusual NAT/bridge devices behind a client."
+  AOS8-FW-ARPSPOOF-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "'prohibit-arp-spoofing' is a hot change. Clients that legitimately answer ARP for another address (a wireless bridge or a client-side VRRP/failover appliance) stop working."
+  AOS8-FW-DENY-INTER-USER-001:
+    level: high
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "The guide warns this 'may have significant impacts on network behavior': all peer-to-peer traffic between wireless users stops — AirPlay/Chromecast, printer and file sharing, screen mirroring, some collaboration tools. The bridging variant additionally breaks ARP between clients unless 'ip local-proxy-arp' is enabled on the user VLANs."
+  AOS8-FW-LOCALVALIDUSERS-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "'local-valid-users' only admits addresses inside locally defined VLAN interfaces; if the controller has no IP interface in a wireless subnet, every client in that subnet is dropped from the user table. Narrowing the validuser ACL by hand has the same failure mode for any subnet you miss."
+  AOS8-FW-CP-ATTACKRATE-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: "'firewall attack-rate cp' is a hot change confined to traffic destined for the controller itself. Set the threshold above your real management/monitoring load or legitimate polling can be policed."
+  AOS8-FW-CP-BWCONTRACT-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: "Control-plane bandwidth contracts are a hot change affecting only traffic addressed to the controller. Under-sizing the untrusted unicast contract can rate-limit captive-portal or authentication bursts. The guide's 20/4/160/4 pps figures are a floor, hundreds of times below what an 8.13 controller ships with (9765/1953/65535/1953), so treat them as the low end of a range and size from your own burst rate."
+  AOS8-FW-CP-ACL-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: "Service ACL rules take effect immediately on management traffic. RISK: this is the classic lockout — a 'deny any proto ssh' without your own management subnet permitted above it cuts your live session and every future one. Stage the permit rules first, verify with 'show firewall-cp', and keep console access available."
+  AOS8-CPSEC-001:
+    level: high
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: "Enabling CPsec re-provisions every AP onto certificate-authenticated IPsec control channels; APs rebuild their tunnels and reboot, dropping their clients. Campus-wide this is an outage-scale change even though the controller itself does not reload."
+  AOS8-MGMT-CONSOLE-BLOCK-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    lockout_risk: true
+    detail: "'mgmt-user console-block' takes effect immediately with no data-plane impact. RISK: it removes the serial console — your emergency access path and the lost-password recovery route — while ArubaOS is running. Confirm working out-of-band admin access first. Boot ROM console access still survives a reboot, so this is not a substitute for physical security."
+  AOS8-MGMT-CENTRALAUTH-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: true
+    detail: "Enabling 'aaa authentication mgmt' affects only administrative logins. RISK: a wrong shared secret, unreachable server, or missing role mapping locks administrators out at the next login. Use redundant servers, test with a second session open, and keep local auth enabled with a random admin password as the fallback."
+  AOS8-AP-CONSOLE-PROTECT-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: "Editing an AP system profile reboots every AP using it, dropping those APs' clients until they reassociate. No controller outage."
+  AOS8-AP-TELNET-DEBUG-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: "Disabling the AP debug shell edits the AP system profile, which reboots the APs using it and drops their clients briefly. Any in-flight remote AP debugging session ends."
+  AOS8-AAA-ENFORCE-DHCP-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "'enforce-dhcp' drops traffic from clients that do not complete DHCP or that use an address other than their lease. Any statically addressed wireless device (printers, scanners, cameras, lab gear) loses connectivity until it is converted to DHCP reservations."
+  AOS8-ROLE-RA-GUARD-001:
+    level: low
+    reboot_required: false
+    client_impact: false
+    ap_impact: false
+    mgmt_plane_only: false
+    detail: "Adding the 'ra-guard' session ACL to a user role applies at the next policy evaluation and only drops router advertisements originating from clients. A client device that is intentionally acting as an IPv6 router (a tethering or lab setup) stops advertising."
+  AOS8-PORTS-DNS-RESPONDER-001:
+    level: high
+    reboot_required: true
+    client_impact: true
+    ap_impact: true
+    mgmt_plane_only: false
+    detail: "'no ip domain lookup' requires a controller restart to take effect, which is a full outage. Once applied, APs that relied on the DNS responder to resolve the controller (isolated networks with no DHCP option 43 and no real DNS server) will not find it and stay down until provisioned another way."
+  AOS8-PORTS-CAPTIVE-PORTAL-001:
+    level: medium
+    reboot_required: false
+    client_impact: true
+    ap_impact: false
+    mgmt_plane_only: false
+    lockout_risk: true
+    detail: "Control-plane deny rules take effect immediately with no reboot. If any captive portal is in use after all — guest onboarding, a redirect from an external portal, or a role you did not inventory — those clients stop receiving the portal page and cannot authenticate. Control-plane rules are ordered, so a deny placed above a permit your management access needs will lock you out."
