@@ -1,4 +1,4 @@
-"""Read-only ArubaOS 8 controller security hardening auditor.
+"""ArubaOS 8 controller security hardening auditor: read-only auditing, opt-in remediation.
 
 The package is strictly layered so each piece is testable in isolation and the
 future PSIRT/advisory module can reuse everything below the control engine:

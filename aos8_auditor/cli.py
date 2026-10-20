@@ -1,4 +1,4 @@
-"""Command-line entrypoint for the ArubaOS 8 read-only auditor.
+"""Command-line entrypoint for the ArubaOS 8 hardening auditor.
 
 Modes:
   * **collect** (default): open a read-only SSH session, run the safelisted
@@ -30,13 +30,16 @@ from .reporting.json_report import collection_summary
 
 
 _DESCRIPTION = """\
-Read-only ArubaOS 8 controller security auditor.
+ArubaOS 8 controller security auditor: read-only auditing, opt-in remediation.
 
-Logs in as a read-only admin over SSHv2, runs `show` commands (never anything that
-mutates state), redacts secrets, and reports which hardening-guide controls are in
-place — each pass/fail/warn/manual/not_applicable/error, scored by severity, with
-preserved redacted evidence. Can also crosswalk to compliance frameworks and check
-configuration workarounds from published PSIRT advisories.
+Auditing logs in as a read-only admin over SSHv2, runs `show` commands (never
+anything that mutates state), redacts secrets, and reports which hardening-guide
+controls are in place — each pass/fail/warn/manual/not_applicable/error, scored by
+severity, with preserved redacted evidence. Can also crosswalk to compliance
+frameworks and check configuration workarounds from published PSIRT advisories.
+
+Remediation is opt-in: it generates a config for you to review and can push it to
+the controller, but never runs 'write memory' — saving is left to you.
 """
 
 _EPILOG = """\

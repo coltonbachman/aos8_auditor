@@ -1,10 +1,16 @@
 # aos8-auditor
 
-A **read-only** security-hardening auditor for ArubaOS 8 controllers. It logs in
-as a read-only admin over SSHv2, runs `show` commands, and reports which of its
-**149 controls** from the two HPE ArubaOS 8 hardening guides are in place — each
-classified `pass` / `fail` / `warn` / `manual` / `not_applicable` / `error`,
-scored by severity, and backed by preserved, **redacted** raw evidence.
+A security-hardening auditor for ArubaOS 8 controllers. **Auditing is
+read-only**: it logs in as a read-only admin over SSHv2, runs `show` commands, and
+reports which of its **149 controls** from the two HPE ArubaOS 8 hardening guides
+are in place — each classified `pass` / `fail` / `warn` / `manual` /
+`not_applicable` / `error`, scored by severity, and backed by preserved,
+**redacted** raw evidence.
+
+Fixing what it finds is a separate, opt-in step. It generates the remediation
+config for you to review and, only if you ask, pushes it to the controller — but
+it never runs `write memory`, so saving (or, on controllers that stage config,
+committing) the change is always yours to do.
 
 The controls are drawn from *both* published guides, which are complementary
 document lineages rather than two editions of one document — every finding cites
@@ -65,6 +71,9 @@ package and test suite import cleanly with no device present.
 A dedicated **read-only** admin account (`mgmt-user <name> read-only`) reachable
 over SSHv2. Commands the read-only role cannot see are recorded as `denied` and
 degrade to manual review — they are never scored as failures.
+
+Applying remediations to the controller (§13) needs an account that can enter
+config mode. Use it for that step only; auditing never needs it.
 
 ## Usage
 
